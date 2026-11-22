@@ -5,6 +5,9 @@ obj/
 __pycache__/
 .pytest_cache/
 generator/spectrogram.png
+*.tmp
+dist/
+publish/
 
 generator/spectrogram-zone.png
 generator/icons-preview.png

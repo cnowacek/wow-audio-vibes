@@ -12,6 +12,7 @@ lua51 = pytest.importorskip("lupa.lua51")
 
 ADDON = Path(__file__).resolve().parents[2] / "addon" / "AudioVibes"
 MOCK = Path(__file__).resolve().parent / "wow_mock.lua"
+RESOLVED_STUB = "AudioVibesResolved = { locations = {}, types = {} }\n"
 
 
 def toc_files():
@@ -25,7 +26,9 @@ def wow():
     rt.execute(MOCK.read_text(encoding="utf-8"))
     G = rt.globals()
     for f in toc_files():
-        r = G.loadstring((ADDON / f).read_text(encoding="utf-8"), "@" + f)
+        # Resolved.lua on disk is whatever the local companion last wrote; tests start from the stub.
+        src = RESOLVED_STUB if f == "Resolved.lua" else (ADDON / f).read_text(encoding="utf-8")
+        r = G.loadstring(src, "@" + f)
         chunk = r[0] if isinstance(r, tuple) else r
         assert chunk is not None, r
         chunk()

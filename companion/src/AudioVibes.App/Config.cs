@@ -79,7 +79,10 @@ public sealed class AppConfig
         File.Move(tmp, FilePath, overwrite: true);
     }
 
-    public static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WoW Audio Vibes");
+    /// <summary>Settings/state folder. AUDIOVIBES_HOME overrides it (the tests use this to stay off the real one).</summary>
+    public static readonly string Dir = Environment.GetEnvironmentVariable("AUDIOVIBES_HOME") is { Length: > 0 } home
+        ? home
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "WoW Audio Vibes");
     public static readonly string FilePath = Path.Combine(Dir, "config.json");
     /// <summary>Folder used before the app was renamed; its files are copied over once.</summary>
     private static readonly string LegacyDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Murmur");
