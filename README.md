@@ -28,10 +28,11 @@ Download both files from the [latest release](https://github.com/cnowacek/wow-au
    - `WoWAudioVibes-win-Portable.zip` is the same app without an installer. It doesn't auto-update.
    That's enough to start: every location plays a free internet radio station picked for its vibe.
 3. **Connect Spotify** (optional; Premium). Spotify playlists become the defaults, and Like works:
+   Open the companion's **Settings** (double-click the tray icon, or tray → *Settings…*) → **Spotify** tab. It walks you through:
    1. Go to https://developer.spotify.com/dashboard → *Create app* → tick **Web API**. You don't need the Web Playback SDK.
-   2. Set the redirect URI to `http://127.0.0.1:8888/callback` exactly. `localhost` is rejected; check the dashboard didn't rewrite it.
-   3. Tray → *Open config*, set `spotify.clientId` and `"useWebApi": true`, then save.
-   4. Tray → *Connect Spotify*. The menu then shows "Spotify: connected as <you>".
+   2. Set the redirect URI to `http://127.0.0.1:8888/callback` exactly (there's a Copy button). `localhost` is rejected; check the dashboard didn't rewrite it.
+   3. Paste the app's Client ID.
+   4. Click *Connect Spotify…*. The tab and the tray menu then show "Spotify: connected as <you>".
 
    Why your own developer app: Spotify limits a developer app in Development Mode to its owner plus 5 people they add by hand. Anything more needs Spotify's approval, which in practice means a registered business with a large user base. So each player brings their own.
 
@@ -118,10 +119,17 @@ For each location, in the mode that applies there, the companion picks in this o
 
 With Spotify connected, each default comes from a curated Spotify search that runs once and is then remembered. Without Spotify, the default is the vibe's radio station. The zone → vibe list lives in [`protocol/zones.json`](protocol/zones.json), which is shared by the addon and the companion. Moving between locations that resolve to the same playlist doesn't restart it.
 
-## Companion config
-`%APPDATA%\WoW Audio Vibes\config.json` is created on first run and reloaded whenever it's saved. If you used the companion when it was called Murmur, it copies your config and Spotify login over from `%APPDATA%\Murmur` once.
+## Companion settings
+Everything is in the **Settings** window (double-click the tray icon):
+- **General:** start with Windows, automatic updates, the WoW client folder.
+- **Music:** location music on/off, where default music comes from (Automatic, Spotify, free radio, or nothing), volume step, how far to lower the music, fanfare length.
+- **Spotify:** guided setup, connect and disconnect.
+- **Game events:** what queue pops, deaths, level-ups and other events do, plus the playlist slots.
+- **Advanced:** signal-detection thresholds and WoW program names.
 
-Useful keys:
+The settings are stored in `%APPDATA%\WoW Audio Vibes\config.json`, which is reloaded whenever it's saved. You can still edit it by hand (Settings → Advanced → *Open config.json*). Settings added in newer versions are filled in with their defaults on start. If you used the companion when it was called Murmur, it copies your config and Spotify login over from `%APPDATA%\Murmur` once.
+
+The keys in `config.json`:
 - `wowClientFolder`: the WoW client folder that contains `WTF\`. It's detected automatically.
 - `eventMap`: what each `EVT_*` does: `PLAY_PAUSE NEXT PREV VOL_UP VOL_DOWN DUCK_ON DUCK_OFF LIKE_CURRENT PLAYLIST_SLOT FANFARE NONE`. `DUCK_ON` takes `autoRevertMs`.
 - `playlistSlots`, `zonePlaylists`, `vibePlaylists`, `duckLevel`, `volumeStep`, `fanfareSeconds`, `detection`.

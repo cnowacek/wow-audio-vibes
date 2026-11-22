@@ -8,7 +8,7 @@ using Serilog;
 
 namespace AudioVibes.App;
 
-public sealed class TrayApp : ApplicationContext
+public sealed class TrayApp : ApplicationContext, ISettingsHost
 {
     private enum Light { Grey, Yellow, Green, Red }
 
@@ -90,9 +90,9 @@ public sealed class TrayApp : ApplicationContext
         menu.Items.Add(_spotifyStatus);
         menu.Items.Add(_zoneStatus);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Settings…", null, (_, _) => ShowSettings()) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add("Zone playlists…", null, (_, _) => ShowZonePlaylists());
         menu.Items.Add("Open debug window", null, (_, _) => ShowDebug());
-        menu.Items.Add("Open config", null, (_, _) => Shell(AppConfig.FilePath));
         menu.Items.Add("Open logs folder", null, (_, _) => Shell(Path.Combine(AppConfig.Dir, "logs")));
         menu.Items.Add(_spotifyConnect);
         menu.Items.Add(_spotifyDisconnect);
@@ -113,7 +113,7 @@ public sealed class TrayApp : ApplicationContext
         menu.Items.Add("Quit", null, (_, _) => { _updater.ApplyOnExit(); ExitThread(); });
 
         _tray = new NotifyIcon { Icon = _icons[Light.Grey], Visible = true, ContextMenuStrip = menu, Text = AppName };
-        _tray.DoubleClick += (_, _) => ShowDebug();
+        _tray.DoubleClick += (_, _) => ShowSettings();
 
         _web = new SpotifyWebApi(Path.Combine(AppConfig.Dir, "spotify.token"));
         ApplySpotify();
@@ -295,6 +295,31 @@ public sealed class TrayApp : ApplicationContext
         _debug.Activate();
     }
 
+    private SettingsForm? _settings;
+    private void ShowSettings(int tab = -1)
+    {
+        if (_settings == null || _settings.IsDisposed) _settings = new SettingsForm(this);
+        if (tab >= 0 && _settings.Controls.OfType<TabControl>().FirstOrDefault() is { } t) t.SelectedIndex = tab;
+        _settings.Show();
+        _settings.Activate();
+    }
+
+    // ISettingsHost
+    AppConfig ISettingsHost.Config => _config;
+    bool ISettingsHost.StartsWithWindows
+    {
+        get => IsAutostart();
+        set { if (value != IsAutostart()) ToggleAutostart(); }
+    }
+    string ISettingsHost.SpotifyStatus => _spotifyStatus.Text ?? "";
+    Task ISettingsHost.ConnectSpotifyAsync() => ConnectSpotifyAsync();
+    Task ISettingsHost.DisconnectSpotifyAsync() => DisconnectSpotifyAsync();
+    void ISettingsHost.ConfigSaved() => ReloadConfig(force: true);
+    Updater ISettingsHost.Updater => _updater;
+    void ISettingsHost.ShowZonePlaylists() => ShowZonePlaylists();
+    IReadOnlyList<string> ISettingsHost.EventNames =>
+        _protocol.Commands.Where(kv => kv.Key.StartsWith("EVT_")).OrderBy(kv => kv.Value).Select(kv => kv.Key).ToList();
+
     private void ShowZonePlaylists()
     {
         if (_zoneForm == null || _zoneForm.IsDisposed) _zoneForm = new ZonePlaylistsForm(_zoneMusic, () => _config);
@@ -317,8 +342,8 @@ public sealed class TrayApp : ApplicationContext
         ReloadConfig(force: true); // don't depend on the file watcher having caught the last save
         if (string.IsNullOrWhiteSpace(_config.Spotify.ClientId))
         {
-            Balloon("Set spotify.clientId in config.json first (see README)", true);
-            Shell(AppConfig.FilePath);
+            Balloon("Add your Spotify app's Client ID first (Settings → Spotify)", true);
+            ShowSettings(2);
             return;
         }
         try
@@ -326,7 +351,7 @@ public sealed class TrayApp : ApplicationContext
             _web.ClientId = _config.Spotify.ClientId;
             await _web.AuthorizeAsync(url => Shell(url));
             var who = await RefreshSpotifyStatusAsync();
-            Balloon(!_config.Spotify.UseWebApi ? "Spotify connected. Set spotify.useWebApi = true in config.json to use it."
+            Balloon(!_config.Spotify.UseWebApi ? "Spotify connected. Tick \"Use Spotify\" in Settings → Spotify to use it."
                     : who != null ? $"Spotify connected as {who}" : "Spotify connected", false);
         }
         catch (Exception e)
@@ -354,7 +379,7 @@ public sealed class TrayApp : ApplicationContext
             status = "Spotify: not connected";
         else if (!_config.Spotify.UseWebApi)
         {
-            status = "Spotify: signed in, but useWebApi is off in config";
+            status = "Spotify: signed in, but turned off in Settings";
             connected = true;
         }
         else
