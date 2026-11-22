@@ -137,8 +137,47 @@ public sealed class AppConfig
             File.WriteAllText(FilePath, JsonSerializer.Serialize(c, Json));
             return c;
         }
+        try { AddMissingSettings(); } catch (Exception e) { Serilog.Log.Warning(e, "couldn't add new settings to config.json"); }
         return Load() ?? new AppConfig();
     }
+
+    /// <summary>
+    /// Settings added in newer versions (e.g. zoneMusic.defaultSource) aren't in an older config.json, so
+    /// nobody would know they exist. Adds any missing keys with their defaults; never changes a value
+    /// that's there. Writes only if something was added.
+    /// </summary>
+    public static bool AddMissingSettings()
+    {
+        if (!File.Exists(FilePath)) return false;
+        var text = File.ReadAllText(FilePath);
+        var docOpts = new System.Text.Json.Nodes.JsonNodeOptions { PropertyNameCaseInsensitive = false };
+        var parseOpts = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+        if (System.Text.Json.Nodes.JsonNode.Parse(text, docOpts, parseOpts) is not System.Text.Json.Nodes.JsonObject file) return false;
+        var defaults = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(new AppConfig(), Json))!;
+        if (!Merge(file, defaults)) return false;
+        var tmp = FilePath + ".tmp";
+        File.WriteAllText(tmp, file.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.Move(tmp, FilePath, overwrite: true);
+        Serilog.Log.Information("added new settings to config.json");
+        return true;
+
+        // Only fills in objects; dictionaries the user owns (zonePlaylists, eventMap…) keep exactly their own keys.
+        static bool Merge(System.Text.Json.Nodes.JsonObject target, System.Text.Json.Nodes.JsonObject defaults)
+        {
+            bool changed = false;
+            foreach (var (key, def) in defaults)
+            {
+                var existing = target.FirstOrDefault(kv => string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase));
+                if (existing.Key == null) { target[key] = def?.DeepClone(); changed = true; }
+                else if (existing.Value is System.Text.Json.Nodes.JsonObject t && def is System.Text.Json.Nodes.JsonObject d && !UserDictionaries.Contains(key))
+                    changed |= Merge(t, d);
+            }
+            return changed;
+        }
+    }
+
+    private static readonly HashSet<string> UserDictionaries = new(StringComparer.OrdinalIgnoreCase)
+        { "playlistSlots", "eventMap", "zonePlaylists", "vibePlaylists" };
 
     /// <summary>Read-only load for hot reload. Never creates or overwrites the file: during an editor's
     /// temp-file swap config.json can briefly be missing. Returns null if it's still missing after retries.</summary>
