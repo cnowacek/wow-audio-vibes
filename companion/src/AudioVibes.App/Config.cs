@@ -57,6 +57,9 @@ public sealed class AppConfig
     public Dictionary<string, string> ZonePlaylists { get; set; } = new();
     /// <summary>Per-vibe overrides: "spooky" → playlist (applies to every zone with that vibe and no zone override).</summary>
     public Dictionary<string, string> VibePlaylists { get; set; } = new();
+    /// <summary>Check GitHub Releases for a new version every few hours and install it on quit/next start
+    /// (only when installed with the Setup.exe; a dev build never updates itself).</summary>
+    public bool AutoUpdate { get; set; } = true;
 
     /// <summary>Companion-window playlist for a location in a mode: "map:1454@relaxed", else "map:1454" (both modes).</summary>
     public string? ZoneOverride(string key, string mode) => Pick(ZonePlaylists, key, mode);

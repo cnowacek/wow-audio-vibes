@@ -1,0 +1,60 @@
+# Push a tag like v1.2.0 and this builds the installer + addon zip and publishes the GitHub release.
+# Installed companions pick the update up on their next check (every 6 hours, or tray → Check for updates).
+#   git tag v1.2.0
+#   git push origin v1.2.0
+# Release notes: put them in the tag message (git tag -a v1.2.0 -m "...") or edit the release afterwards.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (x.y.z, no leading v)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        id: v
+        shell: pwsh
+        run: |
+          $v = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.ref_name }}".TrimStart("v") }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          # Tag message (annotated tags) becomes the release notes.
+          $msg = git tag -l --format="%(contents)" "v$v"
+          if ($msg) { $msg | Set-Content notes.md -Encoding utf8; "notes=notes.md" >> $env:GITHUB_OUTPUT }
+
+      - name: Addon and protocol tests
+        shell: pwsh
+        run: |
+          pip install -r generator/requirements.txt
+          python -m pytest generator/tests -q
+
+      - name: Build and publish
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $a = @{ Version = "${{ steps.v.outputs.version }}"; Publish = $true; RepoUrl = "${{ github.server_url }}/${{ github.repository }}" }
+          if ("${{ steps.v.outputs.notes }}") { $a.Notes = "${{ steps.v.outputs.notes }}" }
+          ./scripts/release.ps1 @a

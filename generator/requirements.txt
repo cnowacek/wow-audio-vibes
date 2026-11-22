@@ -1,5 +1,7 @@
 numpy>=1.26
 soundfile>=0.12
 pytest>=8
+lupa>=2.0        # addon smoke tests run the Lua in Lua 5.1
+pillow>=10       # icons.py / app_icon.py
 # optional, for --plot
 matplotlib>=3.8

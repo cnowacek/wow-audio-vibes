@@ -9,10 +9,15 @@
     <AssemblyName>WoWAudioVibes</AssemblyName>
     <RootNamespace>AudioVibes.App</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <!-- scripts/release.ps1 passes -p:Version=x.y.z; this is the version of local builds. -->
+    <Version>1.2.0</Version>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Product>WoW Audio Vibes</Product>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Serilog" Version="4.0.2" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\..\protocol\zones.json" LogicalName="AudioVibes.zones.json" />

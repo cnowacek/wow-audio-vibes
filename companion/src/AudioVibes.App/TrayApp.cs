@@ -51,6 +51,7 @@ public sealed class TrayApp : ApplicationContext
         return Directory.Exists(forever) ? forever : fromProcess;
     }
     private ZonePlaylistsForm? _zoneForm;
+    private readonly Updater _updater;
     private readonly Dictionary<Light, Icon> _icons;
     private readonly ProtocolSpec _protocol;
     private readonly FrameDecoder _decoder;
@@ -96,7 +97,19 @@ public sealed class TrayApp : ApplicationContext
         menu.Items.Add(_spotifyDisconnect);
         menu.Items.Add(_autostart);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Quit", null, (_, _) => ExitThread());
+        _updater = new Updater(() => _config.AutoUpdate);
+        var restartToUpdate = new ToolStripMenuItem("Restart to update", null, (_, _) => _updater.RestartNow()) { Visible = false };
+        menu.Items.Add(new ToolStripMenuItem("Version " + _updater.VersionText) { Enabled = false });
+        menu.Items.Add("Check for updates", null, async (_, _) => { var m = await _updater.CheckAsync(true); if (m != "") Balloon(m, false); });
+        menu.Items.Add(restartToUpdate);
+        _updater.ReadyChanged += v => Post(() =>
+        {
+            restartToUpdate.Text = $"Restart to update to {v}";
+            restartToUpdate.Visible = true;
+            Balloon($"Update {v} downloaded. It installs when you quit, or choose Restart to update.", false);
+        });
+        _updater.Start();
+        menu.Items.Add("Quit", null, (_, _) => { _updater.ApplyOnExit(); ExitThread(); });
 
         _tray = new NotifyIcon { Icon = _icons[Light.Grey], Visible = true, ContextMenuStrip = menu, Text = AppName };
         _tray.DoubleClick += (_, _) => ShowDebug();
@@ -383,10 +396,29 @@ public sealed class TrayApp : ApplicationContext
     private static void MigrateAutostart()
     {
         using var k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        // The installed app takes over a Start-with-Windows entry left by a dev build (or an old install path).
+        var self = $"\"{Environment.ProcessPath}\"";
+        if (k?.GetValue(AppName) is string cur && cur != self
+            && (Environment.ProcessPath ?? "").Contains(@"\WoWAudioVibes\current\", StringComparison.OrdinalIgnoreCase))
+        {
+            k.SetValue(AppName, self);
+            Log.Information("Start with Windows now points at {Exe}", self);
+        }
         if (k?.GetValue(LegacyRunValue) is not string) return;
         k.DeleteValue(LegacyRunValue, false);
         k.SetValue(AppName, $"\"{Environment.ProcessPath}\"");
         Log.Information("moved Start with Windows entry from {Old} to {New}", LegacyRunValue, AppName);
+    }
+
+    /// <summary>Uninstall hook: don't leave a Start-with-Windows entry pointing at a deleted exe.</summary>
+    public static void RemoveAutostart()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            k?.DeleteValue(AppName, false);
+        }
+        catch { /* uninstall must not fail over this */ }
     }
 
     private void ToggleAutostart()

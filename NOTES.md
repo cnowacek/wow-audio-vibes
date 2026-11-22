@@ -50,8 +50,27 @@ Status as of 2026-11-22. ✅ = verified on this machine · ⏳ = needs you in ga
 | Settings "Hype & keybinds" ran into the footer | ✅ Fixed. Option rows are 36 px instead of 40, boxes are re-stacked (bottom −524 vs footer top −533), "Recently sent" shows 3 entries, and the test-signal hint is shorter so it isn't cut off. A smoke test checks it. |
 | Copy-link per location | ✅ **Link** on every row and *Copy link* on the "You are here" card open a box with the `open.spotify.com` URL selected (Ctrl+C). Custom playlists' links come from the addon; default and companion-window playlists' links come from `Resolved.lua`, which the companion writes into the addon folder (debounced, only when something changed). Without a link the button is greyed out and its tooltip says why. ⏳ Check that WoW picks up the rewritten `Resolved.lua` on `/reload`; it already existed at client start, so it should. |
 
+## Vibe modes (added 2026-11-22)
+| Item | Result |
+|---|---|
+| Two playlists per location | ✅ Saves keep `{relaxed=…, locked=…}` per location and per type. Old single-playlist saves count for both modes (migrated in the addon, read the same way by the companion). Covered by the addon smoke tests and `ModeTests`. |
+| Mode signals | ✅ `MODE_RELAXED` (56) / `MODE_LOCKED` (57) go out with every location, and on their own when the mode changes. `PLAY_LOCATION` is 55. Codes 58–63 are spare. Before the first mode signal the companion uses Auto by location type. |
+| Resume | ⏳ Uses `GET /me/player/currently-playing` when leaving a playlist and `PUT /me/player/play` with `offset` + `position_ms` on return. Resume points last 24 h and are kept in `zone-state.json`. Needs a live check with Premium. |
+| Switching in game | ⏳ The mode pill, the Settings radio and the keybind should re-decide the current location within about a second. |
+
+## Releases and auto-update (added 2026-11-22)
+| Item | Result |
+|---|---|
+| Installer | ✅ `scripts/release.ps1 -Version 1.2.0` builds `WoWAudioVibes-win-Setup.exe` (~83 MB, self-contained .NET 8), the full `.nupkg`, `releases.win.json`, a portable zip and the addon zip. Velopack 1.2.161, pinned as a local dotnet tool. Not yet installed or run on a clean machine. |
+| Auto-update | ⏳ `Updater` checks `GithubSource(RepoUrl)` 45 s after start and then every 6 h, downloads in the background, and applies on Quit (`WaitExitThenApplyUpdates`) or on *Restart to update*. Velopack also applies a downloaded update on the next start. Untested until two releases exist on GitHub. |
+| Release workflow | ⏳ `.github/workflows/release.yml` (tag `v*`) hasn't run yet. |
+| Size | The self-contained runtime plus the Windows SDK projection is most of the 75 MB. Updates after the first are delta packages. |
+| .NET 8 end of support | .NET 8 support ended on 10 Nov 2026. Because the build is self-contained it still runs, but it gets no runtime security fixes. Moving to .NET 10 (LTS) means installing the .NET 10 SDK and changing `TargetFramework` in every project. |
+| Not code-signed | SmartScreen warns on first run. `vpk pack` takes `--signParams` or `--azureTrustedSignFile` if you get a certificate. |
+
 ## Gotchas found
-- **Long paths**: .NET apphost `.exe`s misbehave when the repo lives in a very deep folder (> 260 chars). The repo now lives at `C:\Users\charl\AudioVibes`, where the `.exe`s work. If you move it, keep the path short.
+- **Long paths**: .NET apphost `.exe`s misbehave when the repo lives in a very deep folder (> 260 chars). The repo now lives at `C:\Users\charl\projects\wow-audio-vibes`, where the `.exe`s work. If you move it, keep the path short.
+- **Tests and local state**: the companion tests set `AUDIOVIBES_HOME` to a temp folder. Before that change they read the real `%APPDATA%\WoW Audio Vibes\zone-state.json` and failed once real playlists were cached.
 - The Spotify OAuth callback uses a raw `TcpListener`, because `HttpListener` on `127.0.0.1` needs an admin URL ACL.
 
 ## Deviations from the spec

@@ -7,6 +7,11 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        // Installer/updater hooks (install, update, uninstall) run here and exit; normal starts fall through.
+        Velopack.VelopackApp.Build()
+            .OnBeforeUninstallFastCallback(_ => TrayApp.RemoveAutostart())
+            .Run();
+
         using var single = new Mutex(true, @"Local\AudioVibes.Companion", out bool first);
         if (!first) return;
 
