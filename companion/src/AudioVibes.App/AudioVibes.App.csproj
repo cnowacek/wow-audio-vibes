@@ -27,6 +27,13 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\..\protocol\zones.json" LogicalName="AudioVibes.zones.json" />
   </ItemGroup>
+  <!-- A copy of the addon ships next to the exe (addon\AudioVibes), so Settings can install it into WoW.
+       Resolved.lua is left out: it's per machine, and the installer keeps the player's own. -->
+  <ItemGroup>
+    <Content Include="..\..\..\addon\AudioVibes\**\*" Exclude="..\..\..\addon\AudioVibes\Resolved.lua;..\..\..\addon\AudioVibes\**\*.tmp"
+             Link="addon\AudioVibes\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AudioVibes.Audio\AudioVibes.Audio.csproj" />
     <ProjectReference Include="..\AudioVibes.Decoder\AudioVibes.Decoder.csproj" />

@@ -18,10 +18,13 @@ The signal channel is one-way: the addon only sends. That's why the bar shows th
 ## Install (players)
 You need Windows 10 build 20348+ or Windows 11 (for process loopback). That's all for the free radio defaults and your own music folders. Spotify is optional: it needs the Spotify desktop app, Premium, and a Spotify developer app (step 3).
 
-Download both files from the [latest release](https://github.com/cnowacek/wow-audio-vibes/releases/latest):
+From the [latest release](https://github.com/cnowacek/wow-audio-vibes/releases/latest):
 
-1. **The addon:** `AudioVibes-x.y.z.zip`. Unzip it into `World of Warcraft\_forever_\Interface\AddOns\` (or `_retail_`, `_classic_era_` …), so you end up with `AddOns\AudioVibes\AudioVibes.toc`. Then **restart WoW fully**: exit to desktop, because `/reload` doesn't pick up new sound files.
-2. **The companion:** `WoWAudioVibes-win-Setup.exe`. Run it. It installs for your Windows user only (no admin needed) into `%LOCALAPPDATA%\WoWAudioVibes`, adds a Start menu entry and starts the tray app. Tick *Start with Windows* in its tray menu if you want it always running.
+1. **The companion:** download `WoWAudioVibes-win-Setup.exe` and run it. It installs for your Windows user only (no admin needed) into `%LOCALAPPDATA%\WoWAudioVibes`, adds a Start menu entry and starts the tray app.
+2. **The addon:** the companion comes with it. Double-click the tray icon → **WoW addon** tab → **Install** next to each WoW you play. It finds Forever, Retail, Classic and the other clients, and *Add a WoW folder…* covers unusual install places. Then **restart WoW fully**: exit to desktop, because `/reload` doesn't pick up new sound files.
+   - When the companion updates, it also updates the addon wherever it's installed (*Keep the addon up to date*). WoW folders linked to a development copy are never touched.
+   - Prefer doing it by hand? Unzip `AudioVibes-x.y.z.zip` from the release into `World of Warcraft\_forever_\Interface\AddOns\`, so you end up with `AddOns\AudioVibes\AudioVibes.toc`.
+   - On the General tab, tick *Start with Windows* if you want the companion always running.
    - It **updates itself**. Every 6 hours it checks this repo's releases and downloads a newer version in the background. The update installs when you quit, or straight away with tray → *Restart to update*. Tray → *Check for updates* checks right now. Set `"autoUpdate": false` in the config to turn this off.
    - Windows SmartScreen may warn about an unrecognised app, because the installer isn't code-signed. Click *More info → Run anyway*.
    - Uninstall it from *Settings → Apps*. Your settings in `%APPDATA%\WoW Audio Vibes` are kept.
@@ -122,6 +125,7 @@ With Spotify connected, each default comes from a curated Spotify search that ru
 ## Companion settings
 Everything is in the **Settings** window (double-click the tray icon):
 - **General:** start with Windows, automatic updates, the WoW client folder.
+- **WoW addon:** install or update the addon in each WoW client found on the PC, and keep it updated.
 - **Music:** location music on/off, where default music comes from (Automatic, Spotify, free radio, or nothing), volume step, how far to lower the music, fanfare length.
 - **Spotify:** guided setup, connect and disconnect.
 - **Game events:** what queue pops, deaths, level-ups and other events do, plus the playlist slots.

@@ -114,6 +114,8 @@ public sealed class TrayApp : ApplicationContext, ISettingsHost
 
         _tray = new NotifyIcon { Icon = _icons[Light.Grey], Visible = true, ContextMenuStrip = menu, Text = AppName };
         _tray.DoubleClick += (_, _) => ShowSettings();
+        _tray.BalloonTipClicked += (_, _) => { var a = _onBalloonClick; _onBalloonClick = null; a?.Invoke(); };
+        _tray.BalloonTipClosed += (_, _) => _onBalloonClick = null;
 
         _web = new SpotifyWebApi(Path.Combine(AppConfig.Dir, "spotify.token"));
         ApplySpotify();
@@ -210,6 +212,7 @@ public sealed class TrayApp : ApplicationContext, ISettingsHost
         _source.Start();
         UpdateState();
         _ = RefreshSpotifyStatusAsync();
+        _ = Task.Run(CheckAddonAsync);
         Log.Information("WoW Audio Vibes started; config {Path}", AppConfig.FilePath);
     }
 
@@ -296,10 +299,10 @@ public sealed class TrayApp : ApplicationContext, ISettingsHost
     }
 
     private SettingsForm? _settings;
-    private void ShowSettings(int tab = -1)
+    private void ShowSettings(string? tab = null)
     {
         if (_settings == null || _settings.IsDisposed) _settings = new SettingsForm(this);
-        if (tab >= 0 && _settings.Controls.OfType<TabControl>().FirstOrDefault() is { } t) t.SelectedIndex = tab;
+        if (tab != null && _settings.Controls.OfType<TabControl>().FirstOrDefault() is { } t && t.TabPages[tab] is { } page) t.SelectedTab = page;
         _settings.Show();
         _settings.Activate();
     }
@@ -319,6 +322,33 @@ public sealed class TrayApp : ApplicationContext, ISettingsHost
     void ISettingsHost.ShowZonePlaylists() => ShowZonePlaylists();
     IReadOnlyList<string> ISettingsHost.EventNames =>
         _protocol.Commands.Where(kv => kv.Key.StartsWith("EVT_")).OrderBy(kv => kv.Value).Select(kv => kv.Key).ToList();
+
+    /// <summary>On start: update the addon where an older version is installed; if it isn't installed anywhere, say where to install it.</summary>
+    private async Task CheckAddonAsync()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        try
+        {
+            if (!AddonInstaller.HasBundle) return;
+            var clients = AddonInstaller.FindClients([_config.WowClientFolder]);
+            if (clients.Count == 0) return;
+            if (_config.KeepAddonUpdated)
+            {
+                var updated = AddonInstaller.UpdateOutdated(clients);
+                if (updated.Count > 0)
+                    Post(() => Balloon($"Updated the Audio Vibes addon to {AddonInstaller.BundledVersion} in {string.Join(", ", updated)}. Restart WoW to load it.", false));
+            }
+            if (clients.All(c => AddonInstaller.Status(c).State == AddonState.NotInstalled))
+                Post(() =>
+                {
+                    Balloon("The Audio Vibes addon isn't installed in WoW yet. Click here to install it.", false);
+                    _onBalloonClick = () => ShowSettings("WoW addon");
+                });
+        }
+        catch (Exception e) { Log.Warning(e, "addon check failed"); }
+    }
+
+    private Action? _onBalloonClick;
 
     private void ShowZonePlaylists()
     {
@@ -343,7 +373,7 @@ public sealed class TrayApp : ApplicationContext, ISettingsHost
         if (string.IsNullOrWhiteSpace(_config.Spotify.ClientId))
         {
             Balloon("Add your Spotify app's Client ID first (Settings → Spotify)", true);
-            ShowSettings(2);
+            ShowSettings("Spotify");
             return;
         }
         try

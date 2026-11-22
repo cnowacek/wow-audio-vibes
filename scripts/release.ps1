@@ -36,6 +36,11 @@ $app = Join-Path $root "companion\src\AudioVibes.App\AudioVibes.App.csproj"
 
 function Step($m) { Write-Host "`n== $m" -ForegroundColor Cyan }
 function Check($what) { if ($LASTEXITCODE -ne 0) { throw "$what failed (exit $LASTEXITCODE)" } }
+# UTF-8 without a byte-order mark (Windows PowerShell's -Encoding utf8 adds one, which doesn't belong in a .toc)
+function Set-TocVersion($path) {
+  $lines = (Get-Content $path) -replace '^## Version: .*', "## Version: $Version"
+  [IO.File]::WriteAllLines($path, $lines, (New-Object Text.UTF8Encoding $false))
+}
 
 Push-Location $root
 try {
@@ -43,14 +48,20 @@ try {
   if (Test-Path $releases) { Remove-Item $releases -Recurse -Force }
   New-Item -ItemType Directory -Force $publishDir, $releases | Out-Null
 
+  # Build into dist\artifacts, not the projects' bin\ folders: a companion running from bin\ locks those.
+  $artifacts = Join-Path $dist "artifacts"
   if (-not $SkipTests) {
     Step "Companion tests"
-    dotnet test companion\AudioVibes.Companion.sln -c Release --nologo -v q; Check "dotnet test"
+    dotnet test companion\AudioVibes.Companion.sln -c Release --artifacts-path $artifacts --nologo -v q; Check "dotnet test"
   }
 
   Step "Publishing the companion $Version (self-contained win-x64)"
-  dotnet publish $app -c Release -r win-x64 --self-contained -p:Version=$Version -o $publishDir --nologo -v q
+  dotnet publish $app -c Release -r win-x64 --self-contained -p:Version=$Version --artifacts-path $artifacts -o $publishDir --nologo -v q
   Check "dotnet publish"
+  # The companion carries the addon (Settings → WoW addon installs it): stamp it with this version too.
+  $bundledToc = Join-Path $publishDir "addon\AudioVibes\AudioVibes.toc"
+  if (-not (Test-Path $bundledToc)) { throw "the published companion is missing addon\AudioVibes" }
+  Set-TocVersion $bundledToc
 
   Step "Packing the installer with Velopack"
   dotnet tool restore | Out-Null; Check "dotnet tool restore"
@@ -76,7 +87,7 @@ AudioVibesResolved = { locations = {}, types = {} }
 '@
   Get-ChildItem $stage -Recurse -Include *.tmp | Remove-Item -Force
   $toc = Join-Path $stage "AudioVibes\AudioVibes.toc"
-  (Get-Content $toc) -replace '^## Version: .*', "## Version: $Version" | Set-Content $toc -Encoding utf8
+  Set-TocVersion $toc
   $addonZip = Join-Path $dist "AudioVibes-$Version.zip"
   if (Test-Path $addonZip) { Remove-Item $addonZip }
   # Not Compress-Archive: Windows PowerShell 5.1 writes "\" into entry names, which other unzippers mishandle.

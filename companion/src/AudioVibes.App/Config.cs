@@ -65,6 +65,8 @@ public sealed class AppConfig
     /// <summary>Check GitHub Releases for a new version every few hours and install it on quit/next start
     /// (only when installed with the Setup.exe; a dev build never updates itself).</summary>
     public bool AutoUpdate { get; set; } = true;
+    /// <summary>When the companion starts, update the WoW addon in any client that has an older version installed.</summary>
+    public bool KeepAddonUpdated { get; set; } = true;
 
     /// <summary>Companion-window playlist for a location in a mode: "map:1454@relaxed", else "map:1454" (both modes).</summary>
     public string? ZoneOverride(string key, string mode) => Pick(ZonePlaylists, key, mode);

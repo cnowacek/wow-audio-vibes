@@ -74,9 +74,13 @@ public class LocalPlayerTests
         finally { Directory.Delete(dir, true); }
     }
 
-    [Fact]
+    /// <summary>Windows Server (e.g. GitHub's build machines) may not have Media Foundation installed.</summary>
+    private static bool HasMediaFoundation => File.Exists(Path.Combine(Environment.SystemDirectory, "mfplat.dll"));
+
+    [SkippableFact]
     public async Task DecodesAFolderTrackToStereo48k()
     {
+        Skip.IfNot(HasMediaFoundation, "Media Foundation isn't installed on this machine");
         var dir = TempFolder();
         try
         {

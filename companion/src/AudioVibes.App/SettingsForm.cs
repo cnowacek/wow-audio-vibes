@@ -88,6 +88,7 @@ public sealed class SettingsForm : Form
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
         tabs.TabPages.Add(Page("General", GeneralPage()));
+        tabs.TabPages.Add(Page("WoW addon", AddonPage()));
         tabs.TabPages.Add(Page("Music", MusicPage()));
         tabs.TabPages.Add(Page("Spotify", SpotifyPage()));
         tabs.TabPages.Add(Page("Game events", EventsPage()));
@@ -136,6 +137,95 @@ public sealed class SettingsForm : Form
             Bold("WoW client folder"),
             Row(_wowFolder, browse),
             Hint("Leave empty to find it automatically from the running game. It's the folder with WTF and Interface in it."));
+    }
+
+    private readonly DataGridView _clients = Grid();
+    private readonly CheckBox _keepAddon = Check("Keep the addon up to date when the companion updates");
+    private readonly Label _addonMsg = Hint("");
+
+    private Control AddonPage()
+    {
+        _clients.Dock = DockStyle.None;
+        _clients.Size = new Size(650, 170);
+        _clients.ReadOnly = true;
+        _clients.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _clients.Columns.Add(new DataGridViewTextBoxColumn { Name = "client", HeaderText = "WoW", FillWeight = 70 });
+        _clients.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "Audio Vibes addon", FillWeight = 120 });
+        _clients.Columns.Add(new DataGridViewTextBoxColumn { Name = "path", HeaderText = "Folder", FillWeight = 180 });
+        _clients.Columns.Add(new DataGridViewButtonColumn { Name = "action", HeaderText = "", FillWeight = 55, FlatStyle = FlatStyle.System });
+        _clients.CellContentClick += async (_, e) =>
+        {
+            if (e.RowIndex < 0 || _clients.Columns[e.ColumnIndex].Name != "action") return;
+            if (_clients.Rows[e.RowIndex].Tag is AddonStatus s) await InstallAsync(s);
+        };
+
+        var add = new Button { Text = "Add a WoW folder…", AutoSize = true };
+        add.Click += (_, _) =>
+        {
+            using var d = new FolderBrowserDialog { Description = "Your WoW client folder, e.g. ...\\World of Warcraft\\_forever_", UseDescriptionForTitle = true };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            _wowFolder.Text = d.SelectedPath;   // saved as the WoW client folder (General tab)
+            RefreshClients();
+        };
+        var refresh = new Button { Text = "Refresh", AutoSize = true };
+        refresh.Click += (_, _) => RefreshClients();
+        var openAddons = new Button { Text = "Open AddOns folder", AutoSize = true };
+        openAddons.Click += (_, _) => { if (_clients.CurrentRow?.Tag is AddonStatus s) Open(s.Client.AddOnsDir); };
+
+        return Stack(
+            Bold("Install the addon into WoW"),
+            Hint(AddonInstaller.HasBundle
+                ? $"The companion comes with the Audio Vibes addon (version {AddonInstaller.BundledVersion ?? "?"}). Install it into each WoW you play:"
+                : "This build doesn't include the addon files (it's a development build); use scripts\\link-addon.ps1 instead."),
+            _clients,
+            Row(add, refresh, openAddons),
+            _addonMsg,
+            Gap(),
+            _keepAddon,
+            Hint("Only updates WoW folders where the addon is already installed. Folders linked to a development copy are never touched."),
+            Gap(),
+            Hint("After installing or updating, restart WoW completely (exit to desktop): /reload doesn't load new sound files."));
+    }
+
+    private void RefreshClients()
+    {
+        _clients.Rows.Clear();
+        var extra = new[] { _wowFolder.Text.Trim(), _cfg.WowClientFolder };
+        var clients = AddonInstaller.FindClients(extra);
+        if (clients.Count == 0) { _addonMsg.Text = "No WoW found. Use \"Add a WoW folder…\" and pick the folder with Interface and WTF in it."; return; }
+        foreach (var c in clients)
+        {
+            var s = AddonInstaller.Status(c);
+            var (text, action) = s.State switch
+            {
+                AddonState.NotInstalled => ("Not installed", "Install"),
+                AddonState.UpToDate => ($"Installed, up to date ({s.InstalledVersion})", "Reinstall"),
+                AddonState.Outdated => ($"Version {s.InstalledVersion ?? "?"}: update available", "Update"),
+                AddonState.Different => ($"Installed ({s.InstalledVersion ?? "?"}), different files", "Replace"),
+                AddonState.Linked => ("Linked to a development folder", ""),
+                _ => ("", ""),
+            };
+            int i = _clients.Rows.Add(c.Label, text, c.Path, action);
+            _clients.Rows[i].Tag = s;
+            if (action == "" || !AddonInstaller.HasBundle) _clients.Rows[i].Cells["action"] = new DataGridViewTextBoxCell { Value = "" };
+        }
+        if (_addonMsg.Text.StartsWith("No WoW")) _addonMsg.Text = "";
+    }
+
+    private async Task InstallAsync(AddonStatus s)
+    {
+        if (s.State == AddonState.Different && MessageBox.Show(this,
+                $"The addon in {s.Client.Label} has different files from the ones the companion comes with (maybe a newer or edited copy). Replace it?",
+                Text, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        _addonMsg.Text = $"Installing into {s.Client.Label}…";
+        try
+        {
+            await Task.Run(() => AddonInstaller.Install(s.Client));
+            bool wowRunning = System.Diagnostics.Process.GetProcesses().Any(p => p.ProcessName.StartsWith("Wow", StringComparison.OrdinalIgnoreCase));
+            _addonMsg.Text = $"Installed in {s.Client.Label}." + (wowRunning ? " Restart WoW (exit to desktop) to load it." : " Start WoW and it's there.");
+        }
+        catch (Exception e) { _addonMsg.Text = ""; MessageBox.Show(this, e.Message, Text, MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        RefreshClients();
     }
 
     private Control MusicPage()
@@ -256,6 +346,7 @@ public sealed class SettingsForm : Form
     {
         _autostart.Checked = _host.StartsWithWindows;
         _autoUpdate.Checked = _cfg.AutoUpdate;
+        _keepAddon.Checked = _cfg.KeepAddonUpdated;
         _wowFolder.Text = _cfg.WowClientFolder;
         _zoneMusic.Checked = _cfg.ZoneMusic.Enabled;
         Select(_defaultSource, (_cfg.ZoneMusic.DefaultSource ?? "auto").ToLowerInvariant());
@@ -286,6 +377,7 @@ public sealed class SettingsForm : Form
             .OrderBy(k => int.TryParse(k, out var n) ? n : 999);
         foreach (var k in shown) _slots.Rows.Add(k, _cfg.PlaylistSlots.GetValueOrDefault(k) ?? "");
         RefreshSpotify();
+        RefreshClients();
     }
 
     private void RefreshSpotify()
@@ -305,6 +397,7 @@ public sealed class SettingsForm : Form
         var problems = new List<string>();
 
         c.AutoUpdate = _autoUpdate.Checked;
+        c.KeepAddonUpdated = _keepAddon.Checked;
         var folder = _wowFolder.Text.Trim();
         if (folder.Length > 0 && !Directory.Exists(Path.Combine(folder, "WTF")) && !Directory.Exists(Path.Combine(folder, "Interface")))
             problems.Add("The WoW client folder should be the one with WTF and Interface in it.");
@@ -377,7 +470,7 @@ public sealed class SettingsForm : Form
 
     private static TabPage Page(string title, Control content)
     {
-        var p = new TabPage(title) { Padding = new Padding(0) };
+        var p = new TabPage(title) { Padding = new Padding(0), Name = title };
         content.Dock = DockStyle.Fill;
         p.Controls.Add(content);
         return p;

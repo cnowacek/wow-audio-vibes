@@ -69,6 +69,16 @@ Status as of 2026-11-22. ✅ = verified on this machine · ⏳ = needs you in ga
 | Routing | While radio or folder music is loaded, play/pause/next/prev and volume go to the companion's player instead of Spotify. Ducking applies to both. Like says it only works with Spotify. |
 | Correction | Earlier I said play/pause would work on a YouTube Music tab through Windows' media controls. It wouldn't: `SpotifyTransport` only targets Spotify's media session. |
 
+## Settings window and addon installer (added 2026-11-22)
+| Item | Result |
+|---|---|
+| Settings window | ✅ Tabs: General, WoW addon, Music, Spotify, Game events, Advanced. Saving writes config.json and applies it at once, keeping keys the window doesn't show. A smoke test opens it, presses Apply and checks the file. |
+| Addon bundled with the companion | ✅ `addon\AudioVibes` is copied next to the exe on build and publish, without `Resolved.lua`. The release script stamps its `## Version`. |
+| Finding WoW | ✅ Blizzard's registry `InstallPath`, `World of Warcraft` under the usual folders on every fixed drive, and the configured folder. Each `_flavor_` folder with Interface, WTF or Wow*.exe counts as a client. On this PC it found Forever, Anniversary, Beta, Classic, Classic Era and more. |
+| Installing | ✅ Copies to `AudioVibes.installing`, swaps it in, and removes the old copy (or retries next time if WoW had a file open). Keeps the player's `Resolved.lua`. Never touches a junction or symlink, so your dev link is safe; it shows as "Linked to a development folder". Tested with a fake WoW tree and a real junction. |
+| Auto-update | On start, any client with an *older* `## Version` is updated, with a balloon "restart WoW". The same version with different files is shown as "different files" and only replaced when the player clicks. If the addon isn't installed anywhere, a balloon offers to open the tab. |
+| Not verified | ⏳ Installing into a real `Program Files (x86)` WoW folder. Battle.net usually lets normal users write there; if not, the error says to run the companion as administrator once. |
+
 ## Releases and auto-update (added 2026-11-22)
 | Item | Result |
 |---|---|

@@ -2,7 +2,7 @@
 ## Title: Audio Vibes
 ## Notes: Music for every corner of Azeroth. Controls Spotify through the WoW Audio Vibes companion app.
 ## Author: Audio Vibes
-## Version: 1.1.0
+## Version: 1.3.0
 ## SavedVariables: AudioVibesDB
 
 Commands.lua
