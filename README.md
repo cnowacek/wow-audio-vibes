@@ -37,14 +37,14 @@ Play/pause, next/previous and volume/ducking work without Premium, through Windo
 The tray dot shows the state: **grey** WoW not running · **yellow** attached, waiting for the addon · **green** addon heard · **red** error.
 
 ## Develop
-You need the .NET 8 SDK, plus Python 3.10+ for the tests and for regenerating sounds and icons.
+You need the .NET 10 SDK (pinned in `global.json`), plus Python 3.10+ for the tests and for regenerating sounds and icons.
 
 ```powershell
 .\scripts\link-addon.ps1                    # junction addon/AudioVibes into ...\_forever_\Interface\AddOns
 .\scripts\link-addon.ps1 -Flavor _retail_   # or another client
 cd companion; dotnet build -c Release; dotnet test
 ```
-Run `companion\src\AudioVibes.App\bin\Release\net8.0-windows10.0.19041.0\WoWAudioVibes.exe`. A build from `bin\` never updates itself; only the installed app does.
+Run `companion\src\AudioVibes.App\bin\Release\net10.0-windows10.0.19041.0\WoWAudioVibes.exe`. A build from `bin\` never updates itself; only the installed app does.
 
 The companion writes `addon/AudioVibes/Resolved.lua` (see below), and through the junction that's the repo's copy. The repo keeps an empty stub of it. Run this once so git ignores your local changes:
 ```powershell

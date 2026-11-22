@@ -61,11 +61,11 @@ Status as of 2026-11-22. ✅ = verified on this machine · ⏳ = needs you in ga
 ## Releases and auto-update (added 2026-11-22)
 | Item | Result |
 |---|---|
-| Installer | ✅ `scripts/release.ps1 -Version 1.2.0` builds `WoWAudioVibes-win-Setup.exe` (~83 MB, self-contained .NET 8), the full `.nupkg`, `releases.win.json`, a portable zip and the addon zip. Velopack 1.2.161, pinned as a local dotnet tool. Not yet installed or run on a clean machine. |
+| Installer | ✅ `scripts/release.ps1 -Version 1.2.0` builds `WoWAudioVibes-win-Setup.exe` (self-contained .NET 10), the full `.nupkg`, `releases.win.json`, a portable zip and the addon zip. Velopack 1.2.161, pinned as a local dotnet tool. Not yet installed or run on a clean machine. |
 | Auto-update | ⏳ `Updater` checks `GithubSource(RepoUrl)` 45 s after start and then every 6 h, downloads in the background, and applies on Quit (`WaitExitThenApplyUpdates`) or on *Restart to update*. Velopack also applies a downloaded update on the next start. Untested until two releases exist on GitHub. |
 | Release workflow | ⏳ `.github/workflows/release.yml` (tag `v*`) hasn't run yet. |
-| Size | The self-contained runtime plus the Windows SDK projection is most of the 75 MB. Updates after the first are delta packages. |
-| .NET 8 end of support | .NET 8 support ended on 10 Nov 2026. Because the build is self-contained it still runs, but it gets no runtime security fixes. Moving to .NET 10 (LTS) means installing the .NET 10 SDK and changing `TargetFramework` in every project. |
+| Size | The self-contained runtime plus the Windows SDK projection is most of the size: on .NET 10, Setup.exe is 65 MB and the full package 58 MB (on .NET 8 they were 83 and 75 MB). Updates after the first are delta packages. |
+| .NET 10 | ✅ Moved from .NET 8 (support ended 10 Nov 2026) to .NET 10 LTS (supported to Nov 2028). SDK pinned in `global.json`. Packages updated: ProtectedData 10.0.15, Serilog 4.4.0, Serilog.Sinks.File 7.0.0, Test.Sdk 18.12.0, xunit runner 3.1.5. Builds with no warnings; all tests pass. |
 | Not code-signed | SmartScreen warns on first run. `vpk pack` takes `--signParams` or `--azureTrustedSignFile` if you get a certificate. |
 
 ## Gotchas found
