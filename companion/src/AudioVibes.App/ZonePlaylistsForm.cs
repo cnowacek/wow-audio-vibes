@@ -30,8 +30,8 @@ public sealed class ZonePlaylistsForm : Form
         _hint = new Label
         {
             Dock = DockStyle.Top, Height = 40, Padding = new Padding(8, 2, 8, 0), ForeColor = SystemColors.GrayText,
-            Text = "Every location has a Relaxed and a Locked-in playlist. Paste a Spotify link (or spotify:playlist:…) in either column " +
-                   "to override it; leave it empty for the default, or type off to leave the music alone. Playlists set in game win over these.",
+            Text = "Every location has a Relaxed and a Locked-in playlist. In either column put a Spotify link, a radio stream URL (https://…) " +
+                   "or a music folder (C:\\Music\\… or Choose folder), leave it empty for the default, or type off to leave the music alone. Playlists set in game win over these.",
         };
 
         _zones = MakeGrid();
@@ -63,9 +63,12 @@ public sealed class ZonePlaylistsForm : Form
         save.Click += (_, _) => SaveOverrides();
         _lookup = new Button { Text = "Look up default playlists", AutoSize = true };
         _lookup.Click += async (_, _) => await LookUpDefaultsAsync();
-        var open = new Button { Text = "Open selected cell in Spotify", AutoSize = true };
+        var open = new Button { Text = "Open selected", AutoSize = true };
         open.Click += (_, _) => OpenSelected(tabs.SelectedTab == tz ? _zones : _vibes);
-        buttons.Controls.AddRange([close, save, _lookup, open]);
+        var folder = new Button { Text = "Choose folder…", AutoSize = true };
+        folder.Click += (_, _) => ChooseFolder(tabs.SelectedTab == tz ? _zones : _vibes);
+        _lookup.Visible = _music.DefaultSource == "spotify";
+        buttons.Controls.AddRange([close, save, _lookup, open, folder]);
 
         Controls.Add(tabs);
         Controls.Add(buttons);
@@ -141,6 +144,9 @@ public sealed class ZonePlaylistsForm : Form
     {
         var mood = _music.Catalog.Vibes.GetValueOrDefault(vibe)?.For(mode);
         if (mood == null) return "";
+        var source = _music.DefaultSource;
+        if (source == "off") return "(none)";
+        if (source == "radio") return _music.Catalog.RadioFor(vibe, mode) is { } st ? $"{st.Name}  (radio)" : "(no station)";
         if (SpotifyUri.Normalize(mood.Uri) is not null) return mood.Name;
         if (_music.CachedDefault(vibe, mode) is { } r) return $"{r.Name}  ({mood.Name})";
         return $"{mood.Name}: search \"{mood.Search}\"";
@@ -176,18 +182,35 @@ public sealed class ZonePlaylistsForm : Form
         var colName = grid.Columns[cell.ColumnIndex].Name;
         var mode = colName.EndsWith("Locked") ? Modes.Locked : Modes.Relaxed;
         var key = grid.Rows[cell.RowIndex].Cells["key"].Value as string ?? "";
-        string? uri = SpotifyUri.Normalize(grid.Rows[cell.RowIndex].Cells[mode == Modes.Locked ? "mineLocked" : "mineRelaxed"].Value as string);
+        string? uri = MusicUri.Normalize(grid.Rows[cell.RowIndex].Cells[mode == Modes.Locked ? "mineLocked" : "mineRelaxed"].Value as string);
+        string? url = null;
         if (uri == null)
         {
             var vibe = grid == _vibes ? key : _music.Catalog.VibeFor(key, _music.Seen.GetValueOrDefault(key)?.Category);
-            uri = (grid == _zones ? SpotifyUri.Normalize(_config().VibeOverride(vibe, mode)) : null)
-                  ?? SpotifyUri.Normalize(_music.Catalog.Vibes.GetValueOrDefault(vibe)?.For(mode).Uri)
-                  ?? _music.CachedDefault(vibe, mode)?.Uri;
+            uri = grid == _zones ? MusicUri.Normalize(_config().VibeOverride(vibe, mode)) : null;
+            if (uri == null && _music.DefaultSource == "radio")
+                url = _music.Catalog.RadioFor(vibe, mode)?.Site;   // the station's web page, not the raw stream
+            uri ??= SpotifyUri.Normalize(_music.Catalog.Vibes.GetValueOrDefault(vibe)?.For(mode).Uri) ?? _music.CachedDefault(vibe, mode)?.Uri;
         }
-        if (uri == null) { MessageBox.Show(this, "No playlist yet. Click \"Look up default playlists\" first.", "WoW Audio Vibes"); return; }
-        var parts = uri.Split(':');
-        var url = parts.Length == 3 ? $"https://open.spotify.com/{parts[1]}/{parts[2]}" : uri;
+        url ??= MusicUri.OpenTarget(uri);
+        if (url == null) { MessageBox.Show(this, "No playlist yet. Click \"Look up default playlists\" first.", "WoW Audio Vibes"); return; }
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+    }
+
+    /// <summary>Puts a folder into the selected cell's "yours" column for its mode.</summary>
+    private void ChooseFolder(DataGridView grid)
+    {
+        var cell = grid.CurrentCell;
+        if (cell == null) { MessageBox.Show(this, "Select a row first.", "WoW Audio Vibes"); return; }
+        var col = grid.Columns[cell.ColumnIndex].Name.EndsWith("Locked") ? "mineLocked" : "mineRelaxed";
+        using var dlg = new FolderBrowserDialog { Description = "Music folder to play here (subfolders included)", UseDescriptionForTitle = true };
+        var current = MusicUri.Normalize(grid.Rows[cell.RowIndex].Cells[col].Value as string);
+        if (MusicUri.KindOf(current) == MusicKind.Folder) dlg.InitialDirectory = MusicUri.Target(current!);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        int n = 0;
+        try { n = LocalPlayer.ListFolder(dlg.SelectedPath).Count; } catch { }
+        if (n == 0) MessageBox.Show(this, "That folder has no music files (mp3, m4a, aac, flac, wav, wma or ogg).", "WoW Audio Vibes");
+        grid.Rows[cell.RowIndex].Cells[col].Value = dlg.SelectedPath;
     }
 
     private void SaveOverrides()
@@ -198,8 +221,9 @@ public sealed class ZonePlaylistsForm : Form
         var vibes = Collect(_vibes, bad);
         if (bad.Count > 0)
         {
-            MessageBox.Show(this, "These aren't Spotify playlist links:\n\n" + string.Join("\n", bad.Take(10)) +
-                "\n\nUse a link like https://open.spotify.com/playlist/… or spotify:playlist:…, or 'off'.", "WoW Audio Vibes",
+            MessageBox.Show(this, "These aren't something the companion can play:\n\n" + string.Join("\n", bad.Take(10)) +
+                "\n\nUse a Spotify link (https://open.spotify.com/playlist/…), a radio stream URL (https://…), a folder (C:\\Music\\…), " +
+                "or 'off'. YouTube links don't work.", "WoW Audio Vibes",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
@@ -229,7 +253,7 @@ public sealed class ZonePlaylistsForm : Form
                 var raw = (row.Cells[col].Value as string)?.Trim();
                 if (string.IsNullOrEmpty(raw)) continue;
                 if (SpotifyUri.IsOff(raw)) vals[mode] = "off";
-                else if (SpotifyUri.Normalize(raw) is { } uri) vals[mode] = uri;
+                else if (MusicUri.Normalize(raw) is { } uri) vals[mode] = uri;
                 else bad.Add($"{row.Cells[1].Value} ({Modes.Name(mode)}): {raw}");
             }
             if (vals.Count == 2 && vals[Modes.Relaxed] == vals[Modes.Locked]) d[key] = vals[Modes.Relaxed];

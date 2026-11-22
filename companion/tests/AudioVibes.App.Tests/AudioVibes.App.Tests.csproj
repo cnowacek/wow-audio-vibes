@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\AudioVibes.App\AudioVibes.App.csproj" />

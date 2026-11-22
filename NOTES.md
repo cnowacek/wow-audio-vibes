@@ -58,6 +58,17 @@ Status as of 2026-11-22. ✅ = verified on this machine · ⏳ = needs you in ga
 | Resume | ⏳ Uses `GET /me/player/currently-playing` when leaving a playlist and `PUT /me/player/play` with `offset` + `position_ms` on return. Resume points last 24 h and are kept in `zone-state.json`. Needs a live check with Premium. |
 | Switching in game | ⏳ The mode pill, the Settings radio and the keybind should re-decide the current location within about a second. |
 
+## Radio and music folders (added 2026-11-22)
+| Item | Result |
+|---|---|
+| Why | Spotify Development Mode apps allow the owner plus 5 allow-listed users (Feb 2026 rules), so a shared client ID can't serve the public. Radio and folders give everyone music with no account. |
+| Sources | `MusicUri`: `spotify:…`, `radio:<url>` (any http(s) URL except Spotify/YouTube) and `folder:<path>` (drive or UNC path). Accepted in game (`M.ParseMusicLink`), in the Zone playlists window and in `config.json`. YouTube is rejected with a reason. |
+| Player | `LocalPlayer` (NAudio): a decode thread per track fills an 8 s buffer, so a slow stream never stalls the device; output is WASAPI shared at 48 kHz stereo with volume and ducking ramps. Media Foundation handles MP3/AAC/M4A/WMA/WAV/FLAC and HTTP streams; NAudio.Vorbis handles Ogg. Redirects are followed by hand, since .NET won't follow https→http and Media Foundation fails on some. `.pls`/`.m3u` work by extension or content type. A dropped stream is retried 3 times. |
+| Verified | ✅ Unit tests: a mono 44.1 kHz WAV decodes to 48 kHz stereo at the right level, the addon's own Ogg chirps decode, folder listing, playlist parsing, link parsing, radio defaults by `defaultSource`, and folder resume. ✅ All 11 built-in stations stream and decode live (`AUDIOVIBES_NET_TESTS=1`). |
+| Not verified | ⏳ Hearing it: nothing was played through speakers from here. Check that a zone change switches stations, that ducking and volume keys work on radio, that Spotify pauses when radio takes over, and the reverse. |
+| Routing | While radio or folder music is loaded, play/pause/next/prev and volume go to the companion's player instead of Spotify. Ducking applies to both. Like says it only works with Spotify. |
+| Correction | Earlier I said play/pause would work on a YouTube Music tab through Windows' media controls. It wouldn't: `SpotifyTransport` only targets Spotify's media session. |
+
 ## Releases and auto-update (added 2026-11-22)
 | Item | Result |
 |---|---|

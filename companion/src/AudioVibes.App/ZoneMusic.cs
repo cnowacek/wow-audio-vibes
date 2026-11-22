@@ -96,11 +96,37 @@ public sealed class ZoneMusic
     /// <summary>A vibe's default playlist was looked up (so the addon's Resolved.lua should be rewritten).</summary>
     public event Action? DefaultsChanged;
 
-    public ZoneMusic(ZoneCatalog catalog, SpotifyWebApi web, Func<AppConfig> config, Func<GameOverrides>? game = null)
+    private readonly ILocalPlayer? _local;
+    private readonly Func<Task>? _pauseSpotify;
+
+    /// <param name="local">Player for radio streams and music folders (null: those can't play, e.g. in tests).</param>
+    /// <param name="pauseSpotify">Pauses Spotify when local music takes over.</param>
+    public ZoneMusic(ZoneCatalog catalog, SpotifyWebApi web, Func<AppConfig> config, Func<GameOverrides>? game = null,
+        ILocalPlayer? local = null, Func<Task>? pauseSpotify = null)
     {
         _catalog = catalog; _web = web; _config = config; _game = game ?? (() => GameOverrides.Empty);
+        _local = local; _pauseSpotify = pauseSpotify;
         _state = ZoneState.Load();
     }
+
+    /// <summary>Spotify Web API set up and logged in: Spotify playlists can be started.</summary>
+    public bool SpotifyReady
+    {
+        get
+        {
+            var c = _config();
+            return c.Spotify.UseWebApi && !string.IsNullOrWhiteSpace(c.Spotify.ClientId) && _web.HasRefreshToken;
+        }
+    }
+
+    /// <summary>Where defaults come from right now: "spotify", "radio" or "off" (see zoneMusic.defaultSource).</summary>
+    public string DefaultSource => _config().ZoneMusic.DefaultSource?.Trim().ToLowerInvariant() switch
+    {
+        "spotify" => "spotify",
+        "radio" => "radio",
+        "off" or "none" => "off",
+        _ => SpotifyReady ? "spotify" : "radio",
+    };
 
     /// <summary>Every location key the companion knows: built-in list, visited, and learned in game.</summary>
     public IEnumerable<string> AllKeys() =>
@@ -231,24 +257,42 @@ public sealed class ZoneMusic
         if (zoneKey != null && cfg.ZoneOverride(zoneKey, mode) is { } zo)
         {
             if (SpotifyUri.IsOff(zo)) return Make(null, "(off)", "zone override: off");
-            return Make(SpotifyUri.Normalize(zo), SpotifyUri.Normalize(zo) ?? zo, "your zone playlist");
+            return Make(MusicUri.Normalize(zo), Labeled(zo), "your zone playlist");
         }
         if (game.Types.TryGetValue(type, out var gt) && gt.For(mode) is { } gtp)
             return Make(gtp.Uri, gtp.Name, $"your in-game playlist for every {type}", gtp.Shuffle);
         if (cfg.VibeOverride(vibe, mode) is { } vo)
         {
             if (SpotifyUri.IsOff(vo)) return Make(null, "(off)", "vibe override: off");
-            return Make(SpotifyUri.Normalize(vo), SpotifyUri.Normalize(vo) ?? vo, $"your '{vibeName}' playlist");
+            return Make(MusicUri.Normalize(vo), Labeled(vo), $"your '{vibeName}' playlist");
         }
-        var mood = _catalog.Vibes.GetValueOrDefault(vibe)?.For(mode);
-        if (SpotifyUri.Normalize(mood?.Uri) is { } pinned) return Make(pinned, mood!.Name, "default");
 
+        // 5. defaults: Spotify (pinned or search) when Spotify is in use, else the vibe's free radio station
+        var source = DefaultSource;
+        if (source == "off") return Make(null, "(no default: zoneMusic.defaultSource is off)", "default off");
+        var mood = _catalog.Vibes.GetValueOrDefault(vibe)?.For(mode);
+        ZoneChoice Radio(string why) => _catalog.RadioFor(vibe, mode) is { } st
+            ? Make(MusicUri.RadioPrefix + st.Url, st.Name, why)
+            : Make(null, "(no radio station for this vibe)", why);
+        if (source == "radio") return Radio("default radio");
+
+        if (SpotifyUri.Normalize(mood?.Uri) is { } pinned) return Make(pinned, mood!.Name, "default");
         var cached = CachedDefault(vibe, mode);
-        if (cached == null && resolveSearch) cached = await ResolveDefaultAsync(vibe, mode);
+        if (cached == null && resolveSearch)
+        {
+            try { cached = await ResolveDefaultAsync(vibe, mode); }
+            catch (Exception e) { Log.Warning(e, "default search failed for {Vibe}/{Mode}", vibe, mode); }
+            // Spotify was meant to supply this but couldn't: free radio beats silence (only in auto mode).
+            if (cached == null && IsAuto(cfg)) return Radio("default radio (Spotify search found nothing)");
+        }
         return cached != null
             ? Make(cached.Uri, cached.Name, $"default (search \"{cached.Query}\")")
             : Make(null, $"search \"{mood?.Search}\" (not resolved yet)", "default");
     }
+
+    private static bool IsAuto(AppConfig cfg) => cfg.ZoneMusic.DefaultSource?.Trim().ToLowerInvariant() is null or "" or "auto";
+
+    private static string Labeled(string raw) => MusicUri.Normalize(raw) is { } u ? (MusicUri.IsLocal(u) ? MusicUri.Label(u) : u) : raw;
 
     /// <summary>Runs a vibe mood's default search once and caches the result.</summary>
     public async Task<ResolvedPlaylist?> ResolveDefaultAsync(string vibe, string mode, bool refresh = false)
@@ -273,6 +317,7 @@ public sealed class ZoneMusic
     /// <summary>Looks up every vibe mood default that isn't cached yet (needs the Web API).</summary>
     public async Task ResolveMissingDefaultsAsync()
     {
+        if (DefaultSource != "spotify") return;
         foreach (var (vibe, def) in _catalog.Vibes)
             foreach (var mode in Modes.All)
                 if (CachedDefault(vibe, mode) == null && SpotifyUri.Normalize(def.For(mode).Uri) == null)
@@ -285,13 +330,30 @@ public sealed class ZoneMusic
     /// Plays a playlist. Before switching away from the one we started, remembers its track and position;
     /// when switching back to a playlist with a recent resume point, starts from there.
     /// </summary>
-    private async Task PlayAsync(string uri, bool shuffle)
+    internal async Task PlayAsync(string uri, bool shuffle)
     {
         bool resume = _game().Resume;
         if (resume) await RememberPositionAsync();
         ResumePoint? rp = null;
         if (resume) lock (_gate) rp = _state.Resume.GetValueOrDefault(uri);
-        if (rp != null && DateTime.Now - rp.At < ResumeMaxAge)
+        if (rp != null && DateTime.Now - rp.At >= ResumeMaxAge) rp = null;
+
+        if (MusicUri.IsLocal(uri))
+        {
+            if (_local == null) throw new InvalidOperationException("Radio and music folders aren't available here.");
+            // local music takes over: pause Spotify if it was ours (or is playing anyway)
+            if (MusicUri.KindOf(_currentUri) == MusicKind.Spotify || _currentUri == null)
+                try { if (_pauseSpotify != null) await _pauseSpotify(); } catch (Exception e) { Log.Debug(e, "pausing Spotify failed"); }
+            await _local.PlayAsync(uri, shuffle, rp?.TrackUri, rp?.PositionMs ?? 0);
+            _currentUri = uri;
+            if (rp != null) Log.Information("resumed {Uri} at {Track} {Pos}s", uri, rp.TrackUri, rp.PositionMs / 1000);
+            return;
+        }
+
+        if (MusicUri.KindOf(uri) == MusicKind.Spotify && !SpotifyReady)
+            throw new SpotifyNotConfiguredException("This playlist is on Spotify: connect Spotify in the companion (tray → Connect Spotify), or pick a radio station or music folder instead.");
+        _local?.Stop();   // Spotify takes over from radio/folder music
+        if (rp != null)
         {
             try
             {
@@ -314,6 +376,14 @@ public sealed class ZoneMusic
     private async Task RememberPositionAsync()
     {
         if (_currentUri == null) return;
+        if (MusicUri.IsLocal(_currentUri))
+        {
+            // folders resume by file + position; a radio stream is live, so there's nothing to resume
+            if (_local?.Uri == _currentUri && _local.Position is { } p)
+                lock (_gate) { _state.Resume[_currentUri] = new ResumePoint { TrackUri = p.Track, PositionMs = p.Ms, At = DateTime.Now }; _state.Save(); }
+            return;
+        }
+        if (!SpotifyReady) return;
         try
         {
             var pb = await _web.GetPlaybackAsync();
@@ -356,10 +426,8 @@ public sealed class ZoneMusic
     /// <summary>Plays a vibe's playlist for a while (level-up fanfare), then goes back to the location playlist.</summary>
     public async Task PlayForAWhileAsync(string vibe, TimeSpan duration)
     {
-        const string mode = Modes.Locked;
-        var cfg = _config();
-        string? uri = SpotifyUri.Normalize(cfg.VibeOverride(vibe, mode));
-        uri ??= SpotifyUri.Normalize(_catalog.Vibes.GetValueOrDefault(vibe)?.For(mode).Uri) ?? (await ResolveDefaultAsync(vibe, mode))?.Uri;
+        var choice = await ChooseVibeAsync(vibe, Modes.Locked);
+        string? uri = choice;
         if (uri == null) return;
         var back = Current;
         CancellationTokenSource cts;
@@ -369,17 +437,43 @@ public sealed class ZoneMusic
         if (back?.Uri != null && _currentUri == uri) await PlayAsync(back.Uri, back.Shuffle);
     }
 
+    /// <summary>A vibe's playlist on its own (no location): companion vibe override, else the default.</summary>
+    private async Task<string?> ChooseVibeAsync(string vibe, string mode)
+    {
+        if (MusicUri.Normalize(_config().VibeOverride(vibe, mode)) is { } o) return o;
+        var source = DefaultSource;
+        if (source == "off") return null;
+        if (source == "spotify")
+        {
+            var pinned = SpotifyUri.Normalize(_catalog.Vibes.GetValueOrDefault(vibe)?.For(mode).Uri);
+            var found = pinned ?? (await ResolveDefaultAsync(vibe, mode))?.Uri;
+            if (found != null || !IsAuto(_config())) return found;
+        }
+        return _catalog.RadioFor(vibe, mode) is { } st ? MusicUri.RadioPrefix + st.Url : null;
+    }
+
+    /// <summary>A manual pick (playlist slot): plays it; the next zone change may start its own playlist again.</summary>
+    public async Task PlayManualAsync(string uri, bool shuffle = false)
+    {
+        await PlayAsync(uri, shuffle);
+        ForgetCurrent();
+    }
+
     private async Task DecideAsync(string? zoneKey, string? category, bool force = false)
     {
         var cfg = _config();
         if ((!cfg.ZoneMusic.Enabled && !force) || (zoneKey == null && category == null)) return;
         lock (_gate) { _temporary?.Cancel(); _temporary = null; if (category != null) _lastCategory = category; }
-        if (!cfg.Spotify.UseWebApi || string.IsNullOrWhiteSpace(cfg.Spotify.ClientId))
+        var choice = await ChooseAsync(zoneKey, category ?? _lastCategory);
+        if (MusicUri.KindOf(choice.Uri) == MusicKind.Spotify && !SpotifyReady)
         {
-            if (!_warnedNoWebApi) { _warnedNoWebApi = true; Notify?.Invoke("Zone music needs the Spotify Web API (tray → Connect Spotify)", true); }
+            if (!_warnedNoWebApi)
+            {
+                _warnedNoWebApi = true;
+                Notify?.Invoke("A Spotify playlist is set for this location, but Spotify isn't connected (tray → Connect Spotify).", true);
+            }
             return;
         }
-        var choice = await ChooseAsync(zoneKey, category ?? _lastCategory);
         Current = choice;
         Changed?.Invoke(choice);
         Log.Information("zone {Zone} ({Key}) {Mode} vibe {Vibe} → {Playlist} [{Source}]",

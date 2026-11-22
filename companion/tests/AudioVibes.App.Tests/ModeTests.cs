@@ -25,8 +25,12 @@ AudioVibesDB = {
 }
 """;
 
-    private static ZoneMusic Music(AppConfig cfg, GameOverrides game) =>
-        new(ZoneCatalog.Load(), new SpotifyWebApi(Path.GetTempFileName()), () => cfg, () => game);
+    // These tests are about Spotify defaults; RadioDefaultTests covers the radio ones.
+    private static ZoneMusic Music(AppConfig cfg, GameOverrides game)
+    {
+        cfg.ZoneMusic.DefaultSource = "spotify";
+        return new(ZoneCatalog.Load(), new SpotifyWebApi(Path.GetTempFileName()), () => cfg, () => game);
+    }
 
     [Fact]
     public void ParsesPerModeSaves()

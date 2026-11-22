@@ -73,7 +73,7 @@ public static class ResolvedLua
     {
         static Entry ToEntry(ZoneChoice c) =>
             // Overrides from the window are bare URIs (no name); defaults carry the playlist's real name.
-            new(c.Uri, c.PlaylistLabel.StartsWith("spotify:", StringComparison.Ordinal) || c.Uri == null ? null : c.PlaylistLabel);
+            new(c.Uri, MusicUri.LooksRaw(c.PlaylistLabel) || c.Uri == null ? null : c.PlaylistLabel);
         async Task<ModeEntries> Both(string? key, string? evt)
         {
             var r = await music.ChooseAsync(key, evt, resolveSearch: false, includeGame: false, mode: Modes.Relaxed);

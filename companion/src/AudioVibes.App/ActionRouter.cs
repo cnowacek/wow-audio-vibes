@@ -5,8 +5,11 @@ using Serilog;
 namespace AudioVibes.App;
 
 /// <summary>Maps decoded commands (direct actions or EVT_* events via config.eventMap) to Spotify actions.</summary>
-public sealed class ActionRouter(SpotifyTransport transport, SpotifyVolume volume, SpotifyWebApi web, ZoneMusic zoneMusic, Func<AppConfig> config)
+public sealed class ActionRouter(SpotifyTransport transport, SpotifyVolume volume, SpotifyWebApi web, ZoneMusic zoneMusic, Func<AppConfig> config,
+    ILocalPlayer? local = null)
 {
+    /// <summary>Radio or folder music is loaded: transport and volume keys go to the companion's own player.</summary>
+    private bool Local => local?.IsActive == true;
     public event Action? PingReceived;
     public event Action<string, bool>? Notify; // message, isError
 
@@ -72,28 +75,32 @@ public sealed class ActionRouter(SpotifyTransport transport, SpotifyVolume volum
         bool ok = true;
         switch (action)
         {
-            case "PLAY_PAUSE": ok = await transport.TogglePlayPauseAsync(); break;
-            case "NEXT": ok = await transport.NextAsync(); break;
-            case "PREV": ok = await transport.PreviousAsync(); break;
-            case "VOL_UP": ok = volume.Step(+cfg.VolumeStep); break;
-            case "VOL_DOWN": ok = volume.Step(-cfg.VolumeStep); break;
+            case "PLAY_PAUSE": ok = Local ? local!.TogglePause() : await transport.TogglePlayPauseAsync(); break;
+            case "NEXT":
+                ok = Local ? local!.Next() : await transport.NextAsync();
+                if (!ok && Local) Notify?.Invoke("A radio station has no next track", false);
+                break;
+            case "PREV": ok = Local ? local!.Previous() : await transport.PreviousAsync(); break;
+            case "VOL_UP": if (Local) local!.StepVolume(+cfg.VolumeStep); else ok = volume.Step(+cfg.VolumeStep); break;
+            case "VOL_DOWN": if (Local) local!.StepVolume(-cfg.VolumeStep); else ok = volume.Step(-cfg.VolumeStep); break;
             case "DUCK_ON":
-                ok = await volume.DuckAsync(cfg.DuckLevel);
+                ok = await DuckAllAsync(cfg.DuckLevel);
                 _autoRevert?.Cancel();
                 if (autoRevertMs is > 0)
                 {
                     var cts = _autoRevert = new CancellationTokenSource();
                     _ = Task.Delay(autoRevertMs.Value, cts.Token).ContinueWith(async t =>
                     {
-                        if (!t.IsCanceled) await volume.UnduckAsync();
+                        if (!t.IsCanceled) await UnduckAllAsync();
                     }, TaskScheduler.Default);
                 }
                 break;
             case "DUCK_OFF":
                 _autoRevert?.Cancel();
-                ok = await volume.UnduckAsync();
+                ok = await UnduckAllAsync();
                 break;
             case "LIKE_CURRENT":
+                if (Local) { Notify?.Invoke("Like saves Spotify tracks; it doesn't work with radio or folder music", false); return; }
                 var name = await web.LikeCurrentAsync();
                 Notify?.Invoke($"♥ saved: {name}", false);
                 break;
@@ -103,8 +110,8 @@ public sealed class ActionRouter(SpotifyTransport transport, SpotifyVolume volum
                     Notify?.Invoke($"Playlist slot {slot} is empty in config.json", true);
                     return;
                 }
-                await web.PlayContextAsync(SpotifyUri.Normalize(uri) ?? uri);
-                zoneMusic.ForgetCurrent(); // a manual pick: the next zone change may start its playlist again
+                if (MusicUri.Normalize(uri) is not { } slotUri) { Notify?.Invoke($"Playlist slot {slot} isn't a Spotify link, radio URL or folder", true); return; }
+                await zoneMusic.PlayManualAsync(slotUri);   // a manual pick: the next zone change may start its playlist again
                 break;
             case "FANFARE":
                 _ = zoneMusic.PlayForAWhileAsync("fanfare", TimeSpan.FromSeconds(Math.Max(5, cfg.FanfareSeconds)));
@@ -113,6 +120,19 @@ public sealed class ActionRouter(SpotifyTransport transport, SpotifyVolume volum
                 Notify?.Invoke($"Unknown action '{action}' in config.json", true);
                 return;
         }
-        if (!ok) Log.Information("{Action}: Spotify session not found or command refused", action);
+        if (!ok) Log.Information("{Action}: no player took the command (Spotify not running, or nothing loaded)", action);
+    }
+
+    // Duck both: whichever is playing (and harmless for the other).
+    private async Task<bool> DuckAllAsync(float level)
+    {
+        if (local != null) await local.DuckAsync(level);
+        return await volume.DuckAsync(level) || local?.IsActive == true;
+    }
+
+    private async Task<bool> UnduckAllAsync()
+    {
+        if (local != null) await local.UnduckAsync();
+        return await volume.UnduckAsync() || local?.IsActive == true;
     }
 }

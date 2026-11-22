@@ -52,6 +52,7 @@ public sealed class TrayApp : ApplicationContext
     }
     private ZonePlaylistsForm? _zoneForm;
     private readonly Updater _updater;
+    private readonly LocalPlayer _local;
     private readonly Dictionary<Light, Icon> _icons;
     private readonly ProtocolSpec _protocol;
     private readonly FrameDecoder _decoder;
@@ -125,7 +126,11 @@ public sealed class TrayApp : ApplicationContext
                 $"in-game playlists loaded: {o.Locations.Count} locations, {o.Types.Count} types{(o.Hype != null ? ", hype" : "")}"));
             ScheduleResolvedWrite();   // names learned in game may add locations
         };
-        _zoneMusic = new ZoneMusic(ZoneCatalog.Load(), _web, () => _config, () => _savedVars.Current);
+        _local = new LocalPlayer(Path.Combine(AppConfig.Dir, "player.json"));
+        _local.Error += msg => Post(() => Balloon(msg, true));
+        _local.TrackChanged += t => Post(() => _debug?.AddLog("♪ local: " + t));
+        _zoneMusic = new ZoneMusic(ZoneCatalog.Load(), _web, () => _config, () => _savedVars.Current,
+            _local, async () => await _transport.PauseAsync());
         _zoneMusic.DefaultsChanged += ScheduleResolvedWrite;
         _savedVars.SetClientDir(GuessClientDir(null));
         ScheduleResolvedWrite();
@@ -136,7 +141,7 @@ public sealed class TrayApp : ApplicationContext
             _zoneStatus.Text = (t.Length > 90 ? t[..90] + "…" : t).Replace("&", "&&");
             _debug?.AddLog($"♪ {c.ZoneName} [{c.ZoneKey}] → {c.VibeName} → {c.PlaylistLabel} ({c.Source})");
         });
-        _router = new ActionRouter(_transport, volume, _web, _zoneMusic, () => _config);
+        _router = new ActionRouter(_transport, volume, _web, _zoneMusic, () => _config, _local);
         _router.PingReceived += () => Post(() => { _pinged = true; UpdateState(); Balloon("WoW addon connected", false); });
         _router.Notify += (msg, err) => Post(() => Balloon(msg, err));
 
@@ -192,7 +197,13 @@ public sealed class TrayApp : ApplicationContext
         _watcher.EnableRaisingEvents = true;
 
         _tooltipTimer = new System.Windows.Forms.Timer { Interval = 5000 };
-        _tooltipTimer.Tick += async (_, _) => { _nowPlaying = await _transport.NowPlayingAsync() ?? ""; UpdateState(); };
+        _tooltipTimer.Tick += async (_, _) =>
+        {
+            _nowPlaying = _local.IsActive
+                ? _local.NowPlaying ?? (_zoneMusic.Current is { } c && MusicUri.IsLocal(c.Uri) ? c.PlaylistLabel : "radio")
+                : await _transport.NowPlayingAsync() ?? "";
+            UpdateState();
+        };
         _tooltipTimer.Start();
 
         if (!ProcessLoopbackCapture.IsSupported) Balloon(ProcessLoopbackCapture.SupportMessage, true);
@@ -338,7 +349,7 @@ public sealed class TrayApp : ApplicationContext
     {
         string status; bool connected = false; string? who = null;
         if (string.IsNullOrWhiteSpace(_config.Spotify.ClientId))
-            status = "Spotify: Web API not set up";
+            status = "Spotify: not set up (playing free radio)";
         else if (!_web.HasRefreshToken)
             status = "Spotify: not connected";
         else if (!_config.Spotify.UseWebApi)
@@ -453,6 +464,7 @@ public sealed class TrayApp : ApplicationContext
     protected override void ExitThreadCore()
     {
         _tray.Visible = false;
+        _local.Dispose();
         _source.Dispose();
         _watcher.Dispose();
         _savedVars.Dispose();

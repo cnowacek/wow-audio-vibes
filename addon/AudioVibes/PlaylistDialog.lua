@@ -56,8 +56,8 @@ defText:SetPoint("LEFT", defNote, "RIGHT", 10, 0); defText:SetPoint("RIGHT", use
 
 -- Link field
 local linkLabel = T.Text(d, 12, C.text)
-linkLabel:SetPoint("TOPLEFT", 18, -162); linkLabel:SetText("Spotify playlist link")
-local link = T.Field(d, 484, "https://open.spotify.com/playlist/\226\128\166")
+linkLabel:SetPoint("TOPLEFT", 18, -162); linkLabel:SetText("Spotify link, radio stream URL or music folder")
+local link = T.Field(d, 484, "https://open.spotify.com/playlist/\226\128\166  or  C:\\Music\\\226\128\166")
 link:SetPoint("TOPLEFT", 18, -180)
 local linkStateIcon = T.Icon(d, "check", 14, C.customText)
 linkStateIcon:SetPoint("TOPLEFT", link, "BOTTOMLEFT", 0, -6)
@@ -65,7 +65,7 @@ local linkState = T.Text(d, 11, C.customText)
 linkState:SetPoint("LEFT", linkStateIcon, "RIGHT", 6, 0)
 local linkHint = T.Text(d, 11, C.muted)
 linkHint:SetPoint("TOPLEFT", link, "BOTTOMLEFT", 0, -26)
-linkHint:SetText("In Spotify: Share \226\128\186 Copy link to playlist, then paste here with Ctrl+V.")
+linkHint:SetText("Spotify: Share \226\128\186 Copy link to playlist. Radio: the station's stream URL. Paste with Ctrl+V.")
 
 -- Display name
 local nameLabel = T.Text(d, 12, C.text)
@@ -75,7 +75,7 @@ nameField:SetPoint("TOPLEFT", 18, -282)
 nameField:SetMaxLetters(60)
 local nameHint = T.Text(d, 11, C.muted)
 nameHint:SetPoint("TOPLEFT", nameField, "BOTTOMLEFT", 0, -6)
-nameHint:SetText("WoW can't read playlist names from Spotify. This is the name the player bar shows.")
+nameHint:SetText("WoW can't look names up itself. This is the name the player bar shows.")
 
 -- Apply to
 local applyLabel = T.Text(d, 12, C.text)
@@ -127,19 +127,23 @@ local function validate()
     saveBtn:SetEnabledState(true)
     return true
   end
-  local uri, kind = M.ParseSpotifyLink(text)
+  local uri, kind = M.ParseMusicLink(text)
   linkStateIcon:Show()
   if uri then
     linkStateIcon:SetTexture(T.MEDIA .. "check"); linkStateIcon:SetVertexColor(unpack(C.customText))
     linkState:SetTextColor(unpack(C.customText))
-    linkState:SetText(kind == "album" and "Looks like a Spotify album" or "Looks like a Spotify playlist")
+    linkState:SetText(({
+      album = "Looks like a Spotify album", playlist = "Looks like a Spotify playlist",
+      radio = "An internet radio stream (the companion plays it; no Spotify needed)",
+      folder = "A music folder on this PC (the companion plays it; no Spotify needed)",
+    })[kind] or "Looks good")
     link:SetError(false)
     saveBtn:SetEnabledState(true)
     return true
   end
   linkStateIcon:SetTexture(T.MEDIA .. "cross"); linkStateIcon:SetVertexColor(unpack(C.errText))
   linkState:SetTextColor(unpack(C.errText))
-  linkState:SetText("That isn't a Spotify playlist or album link")
+  linkState:SetText(kind or "Not a Spotify link, radio URL (https://\226\128\166) or folder (C:\\\226\128\166)")
   link:SetError(true)
   saveBtn:SetEnabledState(false)
   return false
@@ -202,7 +206,7 @@ saveBtn:SetScript("OnClick", function(self)
   -- check every edited mode first, so a bad link on the other tab isn't silently dropped
   for _, mode in ipairs(modes) do
     local e = state.edits[mode]
-    if e and strtrim(e.link or "") ~= "" and not M.ParseSpotifyLink(e.link) then showTab(mode); return end
+    if e and strtrim(e.link or "") ~= "" and not M.ParseMusicLink(e.link) then showTab(mode); return end
   end
   for _, mode in ipairs(modes) do
     local e, o = state.edits[mode], state.original[mode]
@@ -210,7 +214,7 @@ saveBtn:SetScript("OnClick", function(self)
     local changed = strtrim(e.link or "") ~= strtrim(o.link or "") or (e.name or "") ~= (o.name or "")
       or (e.shuffle or false) ~= (o.shuffle or false) or (e.applyType or false) ~= (o.applyType or false)
     if changed then
-      local uri = M.ParseSpotifyLink(e.link or "")
+      local uri = M.ParseMusicLink(e.link or "")
       local scope, target = saveTarget(e)
       -- moving between "this location only" and "every type": clear it from where it was
       if state.scope == "location" and (o.applyType or false) ~= (e.applyType or false) and o.link and o.link ~= "" then
@@ -297,7 +301,7 @@ local cpField = T.Field(cp, 424, "")
 cpField:SetPoint("TOPLEFT", 18, -62)
 local cpHint = T.Text(cp, 11, C.muted)
 cpHint:SetPoint("TOPLEFT", cpField, "BOTTOMLEFT", 0, -8)
-cpHint:SetText("Press Ctrl+C to copy, then paste it into your browser or Spotify.")
+cpHint:SetText("Press Ctrl+C to copy, then paste it into your browser, Spotify or Explorer.")
 local cpDone = T.Button(cp, "Done", function() cp:Hide() end, { height = 24, size = 11, width = 64 })
 cpDone:SetPoint("BOTTOMRIGHT", -18, 14)
 
@@ -335,7 +339,7 @@ function M.LinkTooltip(key)
   if key and M.LinkFor(key) then
     return "Copy link", "Shows this location's playlist link so you can open it in your browser or Spotify."
   end
-  return "Copy link", "No link yet. The companion app chooses default playlists; it fills in links once Spotify is connected, and you'll see them after a /reload.",
+  return "Copy link", "No link yet. The companion app chooses default playlists and fills in their links; you'll see them after a /reload.",
     "Or set your own with Change"
 end
 

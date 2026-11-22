@@ -252,7 +252,7 @@ function L:Refresh()
     local own = M.db.locations[key] ~= nil and M.db.locations[key][mode] ~= nil
     local e = { key = key, name = info.name, type = info.type, isNew = info.isNew, pl = pl, ownCustom = own,
                 mode = mode, modeWhy = why,
-                link = M.SpotifyUrl(pl.uri),
+                link = M.OpenUrl(pl.uri),
                 pending = M.db.pending[key] or (pl.scope == "type" and M.db.pending["type:" .. info.type]) or false }
     counts.all = counts.all + 1
     counts[info.type] = (counts[info.type] or 0) + 1
@@ -474,10 +474,10 @@ helpText:SetPoint("TOPLEFT", 24, -20); helpText:SetPoint("RIGHT", -24, 0)
 helpText:SetJustifyV("TOP"); helpText:SetWordWrap(true); helpText:SetSpacing(4)
 helpText:SetText(table.concat({
   "|cffffd100How it works|r",
-  "Audio Vibes plays tiny, near-silent sound signals. The WoW Audio Vibes companion app on your PC hears them in WoW's audio and controls Spotify. Signals only go one way, so this window shows what was sent, not what's playing. The companion's tray icon is where you see that it's connected.",
+  "Audio Vibes plays tiny, near-silent sound signals. The WoW Audio Vibes companion app on your PC hears them in WoW's audio and plays the music: Spotify, internet radio, or music folders on your PC. Signals only go one way, so this window shows what was sent, not what's playing. The companion's tray icon is where you see that it's connected.",
   " ",
   "|cffffd100Location playlists|r",
-  "Every city, zone, dungeon, raid and PvP map has its own playlist. Change one with Change on the Locations tab and paste a Spotify playlist or album link. WoW only saves to disk on /reload or logout, so press Reload UI after changing playlists; the companion picks the changes up from there.",
+  "Every city, zone, dungeon, raid and PvP map has its own playlist. Without Spotify the defaults are free internet radio stations. Change one with Change on the Locations tab and paste a Spotify playlist or album link, a radio stream URL (https://\226\128\166), or a folder on your PC (C:\\Music\\\226\128\166). WoW only saves to disk on /reload or logout, so press Reload UI after changing playlists; the companion picks the changes up from there.",
   " ",
   "|cffffd100Commands|r",
   "/vibes (this window) \194\183 /vibes show (player bar) \194\183 /vibes settings \194\183 /vibes zone (current location id) \194\183 /vibes test",
@@ -486,7 +486,7 @@ helpText:SetText(table.concat({
   "|cffffd100Nothing happens?|r",
   "1. Is the companion app running, and is its tray icon green? Press Send test signal on the Settings tab.",
   "2. Check the Signal check box: game sound must be on, and Sound in background keeps it working while you're alt-tabbed.",
-  "3. Playlists and Like need Spotify connected in the companion (tray menu \226\128\186 Connect Spotify).",
+  "3. Spotify playlists and Like need Spotify connected in the companion (tray menu \226\128\186 Connect Spotify). Radio and folders don't.",
   "4. After installing or updating the addon, restart WoW completely; /reload doesn't load new sound files.",
 }, "\n"))
 

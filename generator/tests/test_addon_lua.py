@@ -125,6 +125,42 @@ def test_spotify_link_parsing(wow):
     assert p("") is None
 
 
+def test_music_link_parsing_radio_and_folders(wow):
+    rt, G = wow
+    AV = G.AudioVibes
+    p = AV.ParseMusicLink
+    assert p("https://open.spotify.com/playlist/ABC?si=1") == ("spotify:playlist:ABC", "playlist")
+    assert p("https://ice1.somafm.com/thistle-128-mp3") == ("radio:https://ice1.somafm.com/thistle-128-mp3", "radio")
+    assert p("radio:http://example.com:8000/live") == ("radio:http://example.com:8000/live", "radio")
+    assert p("C:\\Music\\Haunted\\") == ("folder:C:\\Music\\Haunted", "folder")
+    assert p('"D:/Games/Music"') == ("folder:D:\\Games\\Music", "folder")
+    assert p("\\\\nas\\music") == ("folder:\\\\nas\\music", "folder")
+    uri, why = p("https://www.youtube.com/watch?v=x")
+    assert uri is None and "YouTube" in why
+    uri, why = p("https://open.spotify.com/track/abc")
+    assert uri is None and "playlist or album" in why
+    assert p("just words") is None
+    assert p("") is None
+    # links people can open/copy
+    assert AV.OpenUrl("radio:https://a.example/stream") == "https://a.example/stream"
+    assert AV.OpenUrl("folder:C:\\Music") == "C:\\Music"
+    assert AV.SourceKind("folder:C:\\x") == "folder"
+
+
+def test_dialog_saves_a_radio_station(wow):
+    rt, G = wow
+    AV = G.AudioVibes
+    AV.OpenPlaylistDialog(rt.eval('{ scope = "location", key = "map:1429", mode = "relaxed" }'))
+    ui = AV.dialogWidgets
+    ui.link.SetText(ui.link, "https://ice1.somafm.com/thistle-128-mp3")
+    ui.name.SetText(ui.name, "Thistle")
+    assert not ui.save.disabled
+    ui.save._scripts.OnClick(ui.save, "LeftButton")
+    e = AV.db.locations["map:1429"].relaxed
+    assert e.uri == "radio:https://ice1.somafm.com/thistle-128-mp3" and e.name == "Thistle"
+    assert AV.LinkFor("map:1429", "relaxed") == "https://ice1.somafm.com/thistle-128-mp3"
+
+
 def test_play_now_sends_location_then_play_location(wow):
     rt, G = wow
     AV = G.AudioVibes

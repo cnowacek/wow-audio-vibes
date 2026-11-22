@@ -17,6 +17,14 @@ public sealed class SpotifyTransport
     public async Task<bool> TogglePlayPauseAsync() =>
         await SessionAsync() is { } s && await s.TryTogglePlayPauseAsync();
 
+    /// <summary>Pauses Spotify if it's playing (used when the companion's own radio/folder player takes over).</summary>
+    public async Task<bool> PauseAsync()
+    {
+        if (await SessionAsync() is not { } s) return false;
+        var info = s.GetPlaybackInfo();
+        return info?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing && await s.TryPauseAsync();
+    }
+
     public async Task<bool> NextAsync() =>
         await SessionAsync() is { } s && await s.TrySkipNextAsync();
 

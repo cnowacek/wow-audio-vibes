@@ -21,6 +21,8 @@ public sealed class VibeMood
     public string Search { get; set; } = "";
     /// <summary>Optional pinned default playlist; wins over <see cref="Search"/>.</summary>
     public string? Uri { get; set; }
+    /// <summary>Key into <see cref="ZoneCatalog.Stations"/>: the default when Spotify isn't used.</summary>
+    public string? Radio { get; set; }
 }
 
 /// <summary>A vibe: the top-level fields are its Locked-in mood, <see cref="Relaxed"/> its Relaxed one.</summary>
@@ -29,10 +31,19 @@ public sealed class VibeDef
     public string Name { get; set; } = "";
     public string Search { get; set; } = "";
     public string? Uri { get; set; }
+    public string? Radio { get; set; }
     public VibeMood? Relaxed { get; set; }
 
     public VibeMood For(string mode) =>
-        mode == Modes.Relaxed && Relaxed != null ? Relaxed : new VibeMood { Name = Name, Search = Search, Uri = Uri };
+        mode == Modes.Relaxed && Relaxed != null ? Relaxed : new VibeMood { Name = Name, Search = Search, Uri = Uri, Radio = Radio };
+}
+
+/// <summary>A free internet radio station used as a no-setup default.</summary>
+public sealed class Station
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string? Site { get; set; }
 }
 
 public sealed class ZoneDef
@@ -45,7 +56,12 @@ public sealed class ZoneDef
 /// <summary>Built-in defaults (zones.json, embedded): zone → vibe, vibe → default playlist.</summary>
 public sealed class ZoneCatalog
 {
+    public Dictionary<string, Station> Stations { get; set; } = new();
     public Dictionary<string, VibeDef> Vibes { get; set; } = new();
+
+    /// <summary>The built-in radio station for a vibe's mood, if it has one.</summary>
+    public Station? RadioFor(string vibe, string mode) =>
+        Vibes.GetValueOrDefault(vibe)?.For(mode).Radio is { } k ? Stations.GetValueOrDefault(k) : null;
     public Dictionary<string, string> Categories { get; set; } = new();
     public Dictionary<string, ZoneDef> Zones { get; set; } = new();
 

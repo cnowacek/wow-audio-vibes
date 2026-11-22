@@ -22,6 +22,11 @@ public sealed class ZoneMusicConfig
     public bool Enabled { get; set; } = true;
     /// <summary>How long to collect the zone id + category before deciding (they arrive ~0.5 s apart).</summary>
     public int DecisionDelayMs { get; set; } = 1200;
+    /// <summary>
+    /// Where default music comes from when you haven't picked any: "auto" = Spotify playlists when Spotify is
+    /// connected, else the built-in free radio stations; "spotify"; "radio"; "off" = nothing unless you chose it.
+    /// </summary>
+    public string DefaultSource { get; set; } = "auto";
 }
 
 public sealed class DetectionConfig

@@ -81,10 +81,10 @@ nxt:SetPoint("LEFT", play, "RIGHT", 6, 0)
 local div = T.Line(controls, C.chipBorder, false)
 div:SetHeight(24); div:SetPoint("LEFT", nxt, "RIGHT", 10, 0)
 local vdown = T.IconButton(controls, "voldown", function() M.Send("VOL_DOWN") end,
-  { tooltip = { "Volume down", "Turns Spotify down 10% (Spotify only, not the game)." } })
+  { tooltip = { "Volume down", "Turns the music down 10% (not the game)." } })
 vdown:SetPoint("LEFT", nxt, "RIGHT", 21, 0)
 local vup = T.IconButton(controls, "volup", function() M.Send("VOL_UP") end,
-  { tooltip = { "Volume up", "Turns Spotify up 10%." } })
+  { tooltip = { "Volume up", "Turns the music up 10%." } })
 vup:SetPoint("LEFT", vdown, "RIGHT", 6, 0)
 local like = T.IconButton(controls, "heart", function() M.Send("LIKE_CURRENT") end,
   { tooltip = { "Like track", "Saves the playing track to your Spotify library.", "Needs Spotify connected in the companion app" } })

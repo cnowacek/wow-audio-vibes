@@ -236,7 +236,7 @@ public sealed class GameOverrides
         static GamePlaylist? Pl(object? v)
         {
             if (v is not LuaSavedVariables.LuaTable t) return null;
-            var uri = SpotifyUri.Normalize(t.Str("uri"));
+            var uri = MusicUri.Normalize(t.Str("uri"));   // Spotify, radio:… or folder:…
             if (uri == null) return null;
             return new GamePlaylist(uri, t.Str("name") ?? "Custom playlist", t.Bool("shuffle") ?? false);
         }

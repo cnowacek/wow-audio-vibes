@@ -36,6 +36,7 @@ public class ResolvedLuaTests
     public async Task UsesCompanionChoicesPerModeButNotInGameOnes()
     {
         var cfg = new AppConfig();
+        cfg.ZoneMusic.DefaultSource = "spotify";   // unresolved Spotify defaults are left out
         cfg.ZonePlaylists["map:1429"] = "https://open.spotify.com/playlist/ELWYNN";            // both modes
         cfg.ZonePlaylists["map:1454@relaxed"] = "spotify:playlist:SLOWORG";                     // Orgrimmar, relaxed only
         cfg.VibePlaylists["dungeon@locked"] = "spotify:playlist:DUNGEONS";

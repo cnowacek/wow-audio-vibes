@@ -338,8 +338,22 @@ function M.SpotifyUrl(uri)
   return kind and ("https://open.spotify.com/%s/%s"):format(kind, id) or nil
 end
 
+--- Something a person can open for any music source: the Spotify page, the radio stream URL, or the folder path.
+function M.OpenUrl(uri)
+  uri = uri or ""
+  return M.SpotifyUrl(uri) or uri:match("^radio:(https?://.+)$") or uri:match("^folder:(.+)$")
+end
+
+--- "spotify" | "radio" | "folder" | nil
+function M.SourceKind(uri)
+  uri = uri or ""
+  if uri:find("^spotify:") then return "spotify" end
+  if uri:find("^radio:") then return "radio" end
+  if uri:find("^folder:") then return "folder" end
+end
+
 --- Link to the playlist that applies to a location (in its effective mode, or `mode`), or nil if unknown.
-function M.LinkFor(key, mode) return M.SpotifyUrl(M.PlaylistFor(key, mode).uri) end
+function M.LinkFor(key, mode) return M.OpenUrl(M.PlaylistFor(key, mode).uri) end
 
 --- Save a custom playlist.
 ---   scope "location": target = location key   · scope "type": target = type (every <type> without its own)
@@ -381,6 +395,35 @@ function M.ParseSpotifyLink(s)
     end
   end
   if (kind == "playlist" or kind == "album") and id then return ("spotify:%s:%s"):format(kind, id), kind end
+  return nil
+end
+
+--- Anything the companion can play. Returns uri, kind, or nil plus a reason:
+---   Spotify playlist/album links       → "spotify:playlist:ID", "playlist"|"album"
+---   radio stream URLs (http/https)     → "radio:https://…", "radio"
+---   folders on your PC (C:\… or \\…)   → "folder:C:\…", "folder"
+function M.ParseMusicLink(s)
+  s = strtrim(s or ""):gsub('^"(.*)"$', "%1")
+  if s == "" then return nil end
+  local uri, kind = M.ParseSpotifyLink(s)
+  if uri then return uri, kind end
+  local lower = s:lower()
+  if lower:find("open%.spotify%.com") or lower:find("^spotify:") then
+    return nil, "Spotify links need to be a playlist or album"
+  end
+  local url = s:match("^radio:(.+)$") or s
+  if url:lower():find("^https?://[%w%-%.]+") then
+    local host = url:lower():match("^https?://([^/:%?#]+)") or ""
+    if host:find("youtube%.com$") or host:find("youtu%.be$") then
+      return nil, "YouTube links can't be played; use Spotify, a radio stream or a folder"
+    end
+    return "radio:" .. url, "radio"
+  end
+  local path = s:match("^folder:(.+)$") or s
+  if path:find("^%a:[\\/]") or path:find("^\\\\") then
+    path = path:gsub("/", "\\"):gsub("\\+$", "")
+    return "folder:" .. path, "folder"
+  end
   return nil
 end
 

@@ -1,22 +1,22 @@
 # WoW Audio Vibes
 
-Music for every corner of Azeroth: Spotify that follows you around World of Warcraft (Forever, retail or Classic).
+Music for every corner of Azeroth: music that follows you around World of Warcraft (Forever, retail or Classic), from Spotify, free internet radio, or music folders on your PC.
 
 There are two parts:
 - **Audio Vibes**, the WoW addon. It has a player bar and a config window, and gives every city, zone, dungeon, raid and PvP map its own playlist.
-- **WoW Audio Vibes**, a small Windows tray app (the *companion*) that controls Spotify.
+- **WoW Audio Vibes**, a small Windows tray app (the *companion*) that plays the music. It controls Spotify, and plays radio streams and folders itself.
 
-Addons can't use the network, so the addon plays tiny near-ultrasonic chirps (17–19 kHz, −45 dBFS). The companion captures **only WoW's audio stream**, decodes them and drives Spotify.
+Addons can't use the network, so the addon plays tiny near-ultrasonic chirps (17–19 kHz, −45 dBFS). The companion captures **only WoW's audio stream**, decodes them and starts the right music.
 
 ```
-Audio Vibes addon ─PlaySoundFile(chirp.ogg)─▶ WoW audio ─WASAPI process loopback─▶ WoWAudioVibes.exe ─▶ Spotify
+Audio Vibes addon ─PlaySoundFile(chirp.ogg)─▶ WoW audio ─WASAPI process loopback─▶ WoWAudioVibes.exe ─▶ Spotify / radio / folder
         └──────── saved playlists (AudioVibes.lua, written on /reload or logout) ─────────┘
 ```
 
 The signal channel is one-way: the addon only sends. That's why the bar shows the location's playlist and the last signal *sent*, never a track title. The tray icon is where you see the connection working. The addon never reads combat-restricted data. See [`protocol/PROTOCOL.md`](protocol/PROTOCOL.md) and [`NOTES.md`](NOTES.md).
 
 ## Install (players)
-You need Windows 10 build 20348+ or Windows 11 (for process loopback) and the Spotify desktop app. Location playlists, Hype and Like also need Spotify Premium and a Spotify developer app (step 3).
+You need Windows 10 build 20348+ or Windows 11 (for process loopback). That's all for the free radio defaults and your own music folders. Spotify is optional: it needs the Spotify desktop app, Premium, and a Spotify developer app (step 3).
 
 Download both files from the [latest release](https://github.com/cnowacek/wow-audio-vibes/releases/latest):
 
@@ -26,13 +26,29 @@ Download both files from the [latest release](https://github.com/cnowacek/wow-au
    - Windows SmartScreen may warn about an unrecognised app, because the installer isn't code-signed. Click *More info → Run anyway*.
    - Uninstall it from *Settings → Apps*. Your settings in `%APPDATA%\WoW Audio Vibes` are kept.
    - `WoWAudioVibes-win-Portable.zip` is the same app without an installer. It doesn't auto-update.
-3. **Connect Spotify** (playlists, Hype, Like; Premium):
+   That's enough to start: every location plays a free internet radio station picked for its vibe.
+3. **Connect Spotify** (optional; Premium). Spotify playlists become the defaults, and Like works:
    1. Go to https://developer.spotify.com/dashboard → *Create app* → tick **Web API**. You don't need the Web Playback SDK.
    2. Set the redirect URI to `http://127.0.0.1:8888/callback` exactly. `localhost` is rejected; check the dashboard didn't rewrite it.
    3. Tray → *Open config*, set `spotify.clientId` and `"useWebApi": true`, then save.
    4. Tray → *Connect Spotify*. The menu then shows "Spotify: connected as <you>".
 
-Play/pause, next/previous and volume/ducking work without Premium, through Windows' media controls and Spotify's per-app volume.
+   Why your own developer app: Spotify limits a developer app in Development Mode to its owner plus 5 people they add by hand. Anything more needs Spotify's approval, which in practice means a registered business with a large user base. So each player brings their own.
+
+With Spotify, play/pause, next/previous and volume work through Windows' media controls and Spotify's per-app volume. With radio and folders, the companion plays the music itself and handles those keys.
+
+## Music sources
+Anywhere you can set a playlist (the in-game *Change* dialog, the companion's *Zone playlists* window, `config.json`) you can use:
+
+| Source | Example | Notes |
+|---|---|---|
+| Spotify playlist or album | `https://open.spotify.com/playlist/…` | Needs Spotify connected (step 3). |
+| Internet radio | `https://ice1.somafm.com/thistle-128-mp3` | Any MP3/AAC stream URL, or a `.pls`/`.m3u` link. Next/previous don't apply; pause rejoins the stream live. |
+| A folder of music | `C:\Music\Haunted` | Plays MP3, M4A/AAC, FLAC, WAV, WMA and Ogg Vorbis, subfolders included, in order or shuffled. Coming back within 24 h resumes the same track and position. In the companion window, *Choose folder…* picks one. |
+
+YouTube links aren't supported. YouTube has no playback API for this, and its terms don't allow background audio-only play.
+
+**Default stations.** Without Spotify, every vibe has a Relaxed and a Locked-in station: [Radio Rivendell](https://www.radiorivendell.com) (fantasy music), [Rainwave](https://rainwave.cc) (game music, covers, OverClocked Remix), [Radio Swiss Classic](https://www.radioswissclassic.ch), and [SomaFM](https://somafm.com) channels (Thistle Radio, Drone Zone, The Dark Zone, Doomed, Groove Salad, Metal Detector). They're free and listener-supported; consider supporting them. The list is in [`protocol/zones.json`](protocol/zones.json) under `stations`. `"zoneMusic": { "defaultSource": "auto" }` picks Spotify when connected and radio otherwise. You can also set it to `"spotify"`, `"radio"` or `"off"`.
 
 The tray dot shows the state: **grey** WoW not running · **yellow** attached, waiting for the addon · **green** addon heard · **red** error.
 
@@ -44,6 +60,8 @@ You need the .NET 10 SDK (pinned in `global.json`), plus Python 3.10+ for the te
 .\scripts\link-addon.ps1 -Flavor _retail_   # or another client
 cd companion; dotnet build -c Release; dotnet test
 ```
+`$env:AUDIOVIBES_NET_TESTS = "1"; dotnet test` also checks that every built-in radio station still streams and decodes.
+
 Run `companion\src\AudioVibes.App\bin\Release\net10.0-windows10.0.19041.0\WoWAudioVibes.exe`. A build from `bin\` never updates itself; only the installed app does.
 
 The companion writes `addon/AudioVibes/Resolved.lua` (see below), and through the junction that's the repo's copy. The repo keeps an empty stub of it. Run this once so git ignores your local changes:
@@ -75,7 +93,7 @@ Notes on releasing:
 
 **Config window** (`/vibes`, or the gear):
 - **Locations:** every location with filters (Cities / Zones / Dungeons / Raids / PvP / Custom only) and search, a *You are here* card, and **Link** / **Play** / **Change** / **Reset** per row. **Link** (and *Copy link* on the card) shows the playlist's `open.spotify.com` link already selected; press Ctrl+C, since addons can't write the clipboard themselves. Forever-only zones show up as *New in Forever* once you've visited them.
-- **Change playlist:** paste a Spotify playlist or album link (it's checked as you type), give it a display name, and apply it to this location or to *every <type> without a custom playlist*. You can also turn on shuffle.
+- **Change playlist:** paste a Spotify playlist or album link, a radio stream URL, or a folder path (it's checked as you type), give it a display name, and apply it to this location or to *every <type> without a custom playlist*. You can also turn on shuffle.
 - **Settings:** music, events (lower music on queue pop and death, level-up fanfare), player bar options, a signal check with **Turn on** fixes and **Send test signal**, recently sent signals, the Hype playlist and your keybinds.
 
 **Custom playlists reach the companion through the addon's saved settings**, which WoW only writes on `/reload` or logout. Rows show *Pending reload* and the footer offers **Reload UI** until then.
@@ -98,7 +116,7 @@ For each location, in the mode that applies there, the companion picks in this o
 4. a per-vibe playlist set in the companion (`"spooky@locked"` or `"spooky"`)
 5. the default for the location's **vibe** in that mode (17 vibes such as royal capital, haunted lands, dungeon crawl, raid night, each with a Relaxed and a Locked-in flavour)
 
-Each default comes from a curated Spotify search that runs once and is then remembered. The zone → vibe list lives in [`protocol/zones.json`](protocol/zones.json), which is shared by the addon and the companion. Moving between locations that resolve to the same playlist doesn't restart it.
+With Spotify connected, each default comes from a curated Spotify search that runs once and is then remembered. Without Spotify, the default is the vibe's radio station. The zone → vibe list lives in [`protocol/zones.json`](protocol/zones.json), which is shared by the addon and the companion. Moving between locations that resolve to the same playlist doesn't restart it.
 
 ## Companion config
 `%APPDATA%\WoW Audio Vibes\config.json` is created on first run and reloaded whenever it's saved. If you used the companion when it was called Murmur, it copies your config and Spotify login over from `%APPDATA%\Murmur` once.
@@ -107,7 +125,9 @@ Useful keys:
 - `wowClientFolder`: the WoW client folder that contains `WTF\`. It's detected automatically.
 - `eventMap`: what each `EVT_*` does: `PLAY_PAUSE NEXT PREV VOL_UP VOL_DOWN DUCK_ON DUCK_OFF LIKE_CURRENT PLAYLIST_SLOT FANFARE NONE`. `DUCK_ON` takes `autoRevertMs`.
 - `playlistSlots`, `zonePlaylists`, `vibePlaylists`, `duckLevel`, `volumeStep`, `fanfareSeconds`, `detection`.
+- `zoneMusic.defaultSource`: `auto` (default), `spotify`, `radio` or `off`.
 - `autoUpdate`: `true` by default (installed app only).
+- The radio/folder player's volume is remembered in `player.json`.
 - Set the environment variable `AUDIOVIBES_HOME` to use another settings folder; the tests do this.
 
 ## Debugging and tuning
