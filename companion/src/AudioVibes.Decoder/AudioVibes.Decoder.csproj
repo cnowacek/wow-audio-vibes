@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Single source of truth, embedded at build time. -->
+    <EmbeddedResource Include="..\..\..\protocol\protocol.json" LogicalName="AudioVibes.protocol.json" />
+  </ItemGroup>
+</Project>

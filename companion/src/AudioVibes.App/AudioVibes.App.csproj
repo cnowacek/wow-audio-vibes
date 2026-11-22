@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>WoWAudioVibes</AssemblyName>
+    <RootNamespace>AudioVibes.App</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Serilog" Version="4.0.2" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\protocol\zones.json" LogicalName="AudioVibes.zones.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AudioVibes.Audio\AudioVibes.Audio.csproj" />
+    <ProjectReference Include="..\AudioVibes.Decoder\AudioVibes.Decoder.csproj" />
+    <ProjectReference Include="..\AudioVibes.Spotify\AudioVibes.Spotify.csproj" />
+  </ItemGroup>
+</Project>

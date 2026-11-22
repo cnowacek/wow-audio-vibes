@@ -1,0 +1,7 @@
+<Bindings>
+  <Binding name="AUDIOVIBES_PLAYPAUSE" header="AUDIOVIBES" category="ADDONS">AudioVibes.Send("PLAY_PAUSE")</Binding>
+  <Binding name="AUDIOVIBES_NEXT" category="ADDONS">AudioVibes.Send("NEXT")</Binding>
+  <Binding name="AUDIOVIBES_PREV" category="ADDONS">AudioVibes.Send("PREV")</Binding>
+  <Binding name="AUDIOVIBES_HYPE" category="ADDONS">AudioVibes.Send("EVT_HYPE")</Binding>
+  <Binding name="AUDIOVIBES_MODE" category="ADDONS">AudioVibes.CycleMode()</Binding>
+</Bindings>

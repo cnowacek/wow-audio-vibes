@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: Audio Vibes
+## Notes: Music for every corner of Azeroth. Controls Spotify through the WoW Audio Vibes companion app.
+## Author: Audio Vibes
+## Version: 1.1.0
+## SavedVariables: AudioVibesDB
+
+Commands.lua
+Locations.lua
+Resolved.lua
+Theme.lua
+Core.lua
+Triggers.lua
+PlayerBar.lua
+PlaylistDialog.lua
+Config.lua
