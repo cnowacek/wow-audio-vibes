@@ -52,7 +52,24 @@ Anywhere you can set a playlist (the in-game *Change* dialog, the companion's *Z
 
 YouTube links aren't supported. YouTube has no playback API for this, and its terms don't allow background audio-only play.
 
-**Default stations.** Without Spotify, every vibe has a Relaxed and a Locked-in station: [Radio Rivendell](https://www.radiorivendell.com) (fantasy music), [Rainwave](https://rainwave.cc) (game music, covers, OverClocked Remix), [Radio Swiss Classic](https://www.radioswissclassic.ch), and [SomaFM](https://somafm.com) channels (Thistle Radio, Drone Zone, The Dark Zone, Doomed, Groove Salad, Metal Detector). They're free and listener-supported; consider supporting them. The list is in [`protocol/zones.json`](protocol/zones.json) under `stations`. `"zoneMusic": { "defaultSource": "auto" }` picks Spotify when connected and radio otherwise. You can also set it to `"spotify"`, `"radio"` or `"off"`.
+**Default stations.** Without Spotify, every vibe has a Relaxed and a Locked-in station, chosen to fit it:
+
+| Vibe | Relaxed | Locked-in |
+|---|---|---|
+| Alliance cities | Medieval folk | Medieval music |
+| Orgrimmar, Thunder Bluff | Native American | Folk metal |
+| Barrens, Durotar, Mulgore, Thousand Needles, Stonetalon | Native American | Music of Siberia & Mongolia |
+| Elwynn, Westfall and other farmland | Thistle Radio (Celtic) | StreamingSoundtracks (film & game scores) |
+| Night elf forests, Hinterlands | Radio Rivendell (fantasy) | CeltCast |
+| Desert | Middle Eastern music | Suburbs of Goa |
+| Stranglethorn, Feralas, Un'Goro | Didgeridoo | African folk |
+| Snow | Drone Zone | Folk metal |
+| Undead lands, Undercity, Duskwood | The Dark Zone | Doomed |
+| Swamps, volcanic, Fel | Dark & ritual ambient / The Dark Zone | Doomed / Epic metal |
+| Dungeons | Dungeon synth | OverClocked Remix |
+| Raids · battlegrounds | StreamingSoundtracks · Rainwave Covers | Epic metal · Metal Detector |
+
+The stations are [SomaFM](https://somafm.com), [Radio Caprice](http://radcap.ru), [Radio Rivendell](https://www.radiorivendell.com), [Rainwave](https://rainwave.cc), [StreamingSoundtracks](https://www.streamingsoundtracks.com), [CeltCast](http://celtcast.com), [Radio Art](https://www.radioart.com) and [Radio Swiss Classic](https://www.radioswissclassic.ch). They're free and listener-supported; consider supporting them. Each one has a backup station that plays if it can't be reached. The list is in [`protocol/zones.json`](protocol/zones.json) under `stations`. `"zoneMusic": { "defaultSource": "auto" }` picks Spotify when connected and radio otherwise. You can also set it to `"spotify"`, `"radio"` or `"off"`.
 
 The tray dot shows the state: **grey** WoW not running · **yellow** attached, waiting for the addon · **green** addon heard · **red** error.
 
@@ -64,7 +81,7 @@ You need the .NET 10 SDK (pinned in `global.json`), plus Python 3.10+ for the te
 .\scripts\link-addon.ps1 -Flavor _retail_   # or another client
 cd companion; dotnet build -c Release; dotnet test
 ```
-`$env:AUDIOVIBES_NET_TESTS = "1"; dotnet test` also checks that every built-in radio station still streams and decodes.
+`$env:AUDIOVIBES_NET_TESTS = "1"; dotnet test` also checks that every built-in radio station still streams and decodes. To try new stations, put their stream URLs in a text file (one per line), set `$env:AUDIOVIBES_PROBE_FILE` to its path and run `dotnet test --filter ProbeCandidateStations`; the results land next to it in `<file>.out`. SHOUTcast v1 servers (`ICY 200 OK`) don't work with .NET's HTTP client, so pick another port or mount for those.
 
 Run `companion\src\AudioVibes.App\bin\Release\net10.0-windows10.0.19041.0\WoWAudioVibes.exe`. A build from `bin\` never updates itself; only the installed app does.
 

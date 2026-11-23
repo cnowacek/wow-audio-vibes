@@ -69,6 +69,16 @@ Status as of 2026-11-22. ✅ = verified on this machine · ⏳ = needs you in ga
 | Routing | While radio or folder music is loaded, play/pause/next/prev and volume go to the companion's player instead of Spotify. Ducking applies to both. Like says it only works with Spotify. |
 | Correction | Earlier I said play/pause would work on a YouTube Music tab through Windows' media controls. It wouldn't: `SpotifyTransport` only targets Spotify's media session. |
 
+## Source-aware addon and more stations (added 2026-11-22)
+| Item | Result |
+|---|---|
+| Why | Next did nothing on radio, and the companion's "no next track" notice is a Windows balloon, which is mostly hidden while a game runs full screen. Radio Rivendell was the Relaxed default for most outdoor vibes, the Barrens included. |
+| Companion → addon | `Resolved.lua` now also has `source = { default, spotify }`, rewritten when Spotify or settings change (WoW reads it on login and `/reload`). |
+| Addon | `M.CurrentSource()` works out what plays: the location's playlist, else the companion's default source, or Hype or a slot until the next location. Unknown when a change is pending a reload. On radio, Next, Previous and Like are greyed out on both bars, and keybinds and `/vibes` print why. Like is also off for folders and when the companion has no Spotify. The bar, "You are here" and Settings › Music show the source. If the companion's setup is unknown (an older companion), nothing is greyed out. |
+| Stations | 25 stations (was 11), with Radio Caprice genre channels (Native American, Siberia & Mongolia, Middle Eastern, African folk, medieval, dungeon synth, dark ambient, folk and epic metal), StreamingSoundtracks, CeltCast and Radio Art Didgeridoo. Each has a `backup`, which `ZoneMusic.PlayAsync` plays when the station's stream fails to start; Radio Caprice uses bare IP addresses that could change. Undercity moved to the spooky vibe. |
+| Verified | ✅ All 25 stations stream and decode live through `LocalPlayer`. ✅ Backup fallback (unit test). ✅ The addon greys out controls on radio and the UI runs without errors (Lua tests). |
+| Not verified | ⏳ Whether each station sounds right for its zones: picked from genre listings, not by listening. ⏳ How the greyed-out buttons look in game. |
+
 ## Settings window and addon installer (added 2026-11-22)
 | Item | Result |
 |---|---|

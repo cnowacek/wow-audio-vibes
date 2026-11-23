@@ -44,6 +44,8 @@ public sealed class Station
     public string Name { get; set; } = "";
     public string Url { get; set; } = "";
     public string? Site { get; set; }
+    /// <summary>Key of a station that fits the same vibe, played when this one can't be reached.</summary>
+    public string? Backup { get; set; }
 }
 
 public sealed class ZoneDef
@@ -62,6 +64,14 @@ public sealed class ZoneCatalog
     /// <summary>The built-in radio station for a vibe's mood, if it has one.</summary>
     public Station? RadioFor(string vibe, string mode) =>
         Vibes.GetValueOrDefault(vibe)?.For(mode).Radio is { } k ? Stations.GetValueOrDefault(k) : null;
+
+    /// <summary>The backup for a built-in station's stream URL ("radio:…" or bare), or null.</summary>
+    public Station? BackupFor(string uri)
+    {
+        var url = uri.StartsWith(MusicUri.RadioPrefix, StringComparison.OrdinalIgnoreCase) ? uri[MusicUri.RadioPrefix.Length..] : uri;
+        var st = Stations.Values.FirstOrDefault(s => string.Equals(s.Url, url, StringComparison.OrdinalIgnoreCase));
+        return st?.Backup is { } b && Stations.GetValueOrDefault(b) is { } backup && backup != st ? backup : null;
+    }
     public Dictionary<string, string> Categories { get; set; } = new();
     public Dictionary<string, ZoneDef> Zones { get; set; } = new();
 

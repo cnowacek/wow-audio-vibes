@@ -7,7 +7,7 @@ AudioVibesLocations = {
   ["map:1457"] = { name = "Darnassus", type = "city", vibe = "city_alliance", default = { relaxed = "Tavern evening", locked = "Royal capital" } },
   ["map:1454"] = { name = "Orgrimmar", type = "city", vibe = "city_horde", default = { relaxed = "Village fires", locked = "War camp" } },
   ["map:1456"] = { name = "Thunder Bluff", type = "city", vibe = "city_horde", default = { relaxed = "Village fires", locked = "War camp" } },
-  ["map:1458"] = { name = "Undercity", type = "city", vibe = "city_horde", default = { relaxed = "Village fires", locked = "War camp" } },
+  ["map:1458"] = { name = "Undercity", type = "city", vibe = "spooky", default = { relaxed = "Haunted lands", locked = "Grave march" } },
   ["map:1429"] = { name = "Elwynn Forest", type = "zone", vibe = "pastoral", default = { relaxed = "Peaceful countryside", locked = "Open road" } },
   ["map:1436"] = { name = "Westfall", type = "zone", vibe = "pastoral", default = { relaxed = "Peaceful countryside", locked = "Open road" } },
   ["map:1433"] = { name = "Redridge Mountains", type = "zone", vibe = "pastoral", default = { relaxed = "Peaceful countryside", locked = "Open road" } },

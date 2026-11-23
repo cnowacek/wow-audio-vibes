@@ -109,6 +109,28 @@ public class LocalPlayerTests
         finally { Directory.Delete(dir, true); }
     }
 
+    /// <summary>
+    /// Dev tool for picking stations: AUDIOVIBES_PROBE_FILE = a text file with one stream URL per line;
+    /// writes "ok|fail &lt;details&gt; &lt;url&gt;" for each to the same path + ".out". Never fails.
+    /// </summary>
+    [SkippableFact]
+    public async Task ProbeCandidateStations()
+    {
+        var file = Environment.GetEnvironmentVariable("AUDIOVIBES_PROBE_FILE");
+        Skip.If(string.IsNullOrEmpty(file), "set AUDIOVIBES_PROBE_FILE to probe candidate streams");
+        var urls = File.ReadAllLines(file!).Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith('#')).ToList();
+        var results = await Task.WhenAll(urls.Select(async url =>
+        {
+            try
+            {
+                var (peak, decoded) = await LocalPlayer.ProbeAsync("radio:" + url, TimeSpan.FromSeconds(3)).WaitAsync(TimeSpan.FromSeconds(40));
+                return $"{(decoded >= TimeSpan.FromSeconds(2) ? "ok  " : "fail")} decoded={decoded.TotalSeconds:0.0}s peak={peak:0.00} {url}";
+            }
+            catch (Exception e) { return $"fail {e.GetType().Name}: {e.Message.Split('\n')[0]} {url}"; }
+        }));
+        File.WriteAllLines(file + ".out", results);
+    }
+
     /// <summary>Live check of the built-in stations. Off by default (needs the internet); set AUDIOVIBES_NET_TESTS=1.</summary>
     [SkippableFact]
     public async Task BuiltInStationsDecode()

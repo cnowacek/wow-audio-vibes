@@ -344,7 +344,13 @@ public sealed class ZoneMusic
             // local music takes over: pause Spotify if it was ours (or is playing anyway)
             if (MusicUri.KindOf(_currentUri) == MusicKind.Spotify || _currentUri == null)
                 try { if (_pauseSpotify != null) await _pauseSpotify(); } catch (Exception e) { Log.Debug(e, "pausing Spotify failed"); }
-            await _local.PlayAsync(uri, shuffle, rp?.TrackUri, rp?.PositionMs ?? 0);
+            try { await _local.PlayAsync(uri, shuffle, rp?.TrackUri, rp?.PositionMs ?? 0); }
+            catch (Exception e) when (_catalog.BackupFor(uri) is { } backup)
+            {
+                // A built-in station is down (they're free streams; some move): play its backup instead.
+                Log.Warning(e, "radio {Uri} failed; playing its backup {Backup}", uri, backup.Name);
+                await _local.PlayAsync(MusicUri.RadioPrefix + backup.Url, shuffle, null, 0);
+            }
             _currentUri = uri;
             if (rp != null) Log.Information("resumed {Uri} at {Track} {Pos}s", uri, rp.TrackUri, rp.PositionMs / 1000);
             return;

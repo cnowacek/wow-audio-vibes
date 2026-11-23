@@ -14,8 +14,12 @@ public class RadioDefaultTests
         public bool IsActive => Uri != null;
         public string? NowPlaying => null;
         public (string Track, int Ms)? Position { get; set; }
+        public string? FailFor;   // PlayAsync of this uri throws, like an unreachable stream
         public Task PlayAsync(string uri, bool shuffle, string? resumeTrack = null, int resumeMs = 0)
-        { Played.Add((uri, shuffle, resumeTrack, resumeMs)); Uri = uri; return Task.CompletedTask; }
+        {
+            if (uri == FailFor) throw new IOException("stream unreachable");
+            Played.Add((uri, shuffle, resumeTrack, resumeMs)); Uri = uri; return Task.CompletedTask;
+        }
         public void Stop() { Stops++; Uri = null; }
         public bool TogglePause() => true;
         public bool Pause() => true;
@@ -49,8 +53,29 @@ public class RadioDefaultTests
             {
                 var st = cat.RadioFor(vibe, mode);
                 Assert.True(st != null, $"{vibe}/{mode} has no station");
-                Assert.StartsWith("https://", st!.Url);
+                Assert.Matches("^https?://", st!.Url);
             }
+        // Every backup names a real station, and no station is its own backup.
+        foreach (var (key, st) in cat.Stations)
+        {
+            Assert.True(st.Backup == null || cat.Stations.ContainsKey(st.Backup), $"{key}'s backup {st.Backup} doesn't exist");
+            Assert.NotEqual(key, st.Backup);
+        }
+    }
+
+    [Fact]
+    public async Task ADeadStationFallsBackToItsBackup()
+    {
+        var cat = ZoneCatalog.Load();
+        var natam = cat.Stations["nativeamerican"];
+        var backup = cat.Stations[natam.Backup!];
+        var (music, player, _) = Make(new AppConfig());
+        player.FailFor = "radio:" + natam.Url;
+        await music.PlayAsync("radio:" + natam.Url, false);
+        Assert.Equal("radio:" + backup.Url, player.Uri);
+        // A stream that isn't a built-in station has no backup: the error comes through.
+        player.FailFor = "radio:https://example.invalid/stream";
+        await Assert.ThrowsAsync<IOException>(() => music.PlayAsync("radio:https://example.invalid/stream", false));
     }
 
     [Fact]
@@ -60,7 +85,9 @@ public class RadioDefaultTests
         Assert.Equal("radio", music.DefaultSource);
         var orgRelaxed = await music.ChooseAsync("map:1454", null, mode: Modes.Relaxed);
         Assert.Equal(MusicKind.Radio, MusicUri.KindOf(orgRelaxed.Uri));
-        Assert.Equal("Radio Rivendell", orgRelaxed.PlaylistLabel);
+        Assert.Equal("Radio Caprice Native American", orgRelaxed.PlaylistLabel);
+        var barrens = await music.ChooseAsync("map:1413", null, mode: Modes.Relaxed);
+        Assert.DoesNotContain("rivendell", barrens.Uri);
         var duskwood = await music.ChooseAsync("map:1431", null, mode: Modes.Locked);
         Assert.Contains("doomed", duskwood.Uri);
     }
