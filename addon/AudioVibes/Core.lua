@@ -174,6 +174,8 @@ function M.Send(name, what)
     chat("unknown command " .. tostring(name))
     return false
   end
+  local unavailable = M.ControlUnavailable and M.ControlUnavailable(name)
+  if unavailable then chat(unavailable); return false end
   local now = GetTime()
   if name:sub(1, 4) == "EVT_" then
     local last = lastEventSent[code]
@@ -185,6 +187,12 @@ function M.Send(name, what)
   end
   if what == nil then what = FRIENDLY[name] or name end
   enqueue({ path = AudioVibesCommands.files[code], label = ("%s (%d)"):format(name, code), what = what or nil })
+  if name == "EVT_HYPE" then
+    local h = M.db and M.db.hype   -- without an in-game Hype playlist the companion plays one of its slots
+    M.SetPlayingInstead({ kind = h and M.SourceKind(h.uri), name = h and h.name or "Hype", why = "hype" })
+  elseif name:find("^PLAYLIST_SLOT_") then
+    M.SetPlayingInstead({ name = what or "Playlist slot", why = "slot" })
+  end
   return true
 end
 
@@ -279,6 +287,11 @@ function M.PlayLocation(key, what)
   M.SendMode(M.EffectiveMode(key, info.type), true, false)
   enqueue({ path = AudioVibesCommands.files[AudioVibesCommands.codes.PLAY_LOCATION], label = "PLAY_LOCATION",
             what = what or ("Play: " .. info.name) })
+  if M.location and M.location.key == key then M.SetPlayingInstead(nil)
+  else
+    local pl = M.PlaylistFor(key)
+    M.SetPlayingInstead({ kind = M.SourceKind(pl.uri), name = pl.name, why = "other" })
+  end
   return true
 end
 
@@ -350,6 +363,61 @@ function M.SourceKind(uri)
   if uri:find("^spotify:") then return "spotify" end
   if uri:find("^radio:") then return "radio" end
   if uri:find("^folder:") then return "folder" end
+end
+
+M.SOURCE_NAME = { spotify = "Spotify", radio = "Internet radio", folder = "Music folder" }
+
+--- The companion's music setup, from Resolved.lua: { known, default = "spotify"|"radio"|"off", spotify = bool }.
+--- known = false until a companion that writes it has run (then the addon doesn't grey anything out).
+function M.CompanionSource()
+  local s = AudioVibesResolved and AudioVibesResolved.source
+  if type(s) ~= "table" then return { known = false } end
+  return { known = true, default = s.default, spotify = s.spotify == true }
+end
+
+-- Hype and playlist slots play something other than the location's playlist until the next location.
+local playingInstead   -- nil = the location's playlist; otherwise { kind = ... } (kind nil = can't tell)
+
+--- What the companion is playing (as far as the addon can tell):
+--- { kind = "spotify"|"radio"|"folder"|nil, name, why } — kind nil means unknown.
+function M.CurrentSource()
+  if playingInstead then return playingInstead end
+  local loc = M.location
+  if not loc then return {} end
+  local pl = M.PlaylistFor(loc.key)
+  local pending = M.db.pending[loc.key] or (pl.scope == "type" and M.db.pending["type:" .. loc.type])
+  if pending then return { name = pl.name, why = "pending" } end   -- the companion hasn't seen the change yet
+  local kind = M.SourceKind(pl.uri)
+  if not kind and not pl.custom then
+    local cs = M.CompanionSource()
+    if cs.default == "radio" or cs.default == "spotify" then kind = cs.default end
+  end
+  return { kind = kind, name = pl.name }
+end
+
+function M.SetPlayingInstead(entry)
+  playingInstead = entry
+  M.Fire("SOURCE")
+end
+-- A new location (or Play now) brings the location's playlist back. Registered here, before the UI's
+-- listeners, so they already see the cleared state.
+M.On("LOCATION", function() playingInstead = nil end)
+
+--- Why a transport command can't work with what's playing, or nil if it can (or the addon can't tell).
+function M.ControlUnavailable(name)
+  local src = M.CurrentSource()
+  local cs = M.CompanionSource()
+  if src.kind == "radio" then
+    if name == "NEXT" or name == "PREV" then
+      return "Radio plays live, so there's no next or previous track. To skip tracks here, pick a music folder or a Spotify playlist for this location."
+    elseif name == "LIKE_CURRENT" then
+      return "Like saves tracks to Spotify; it doesn't work with radio."
+    end
+  elseif src.kind == "folder" and name == "LIKE_CURRENT" then
+    return "Like saves tracks to Spotify; it doesn't work with music folders."
+  elseif name == "LIKE_CURRENT" and cs.known and not cs.spotify then
+    return "Like needs Spotify connected in the companion app (Settings \226\128\186 Spotify)."
+  end
 end
 
 --- Link to the playlist that applies to a location (in its effective mode, or `mode`), or nil if unknown.

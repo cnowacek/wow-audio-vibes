@@ -53,6 +53,19 @@ public class ResolvedLuaTests
         // Westfall's in-game playlist is the addon's own business; the companion only reports its own choices.
         Assert.Null(locs.Table("map:1436"));
         Assert.True(count >= 20);
+        // The music setup, so the addon knows what can work: Spotify chosen, but not connected here.
+        var src = ((LuaSavedVariables.LuaTable)LuaSavedVariables.Parse(lua)["AudioVibesResolved"]!).Table("source")!;
+        Assert.Equal("spotify", src.Str("default"));
+        Assert.DoesNotContain("spotify = true", lua);
+    }
+
+    [Fact]
+    public async Task ReportsRadioAsTheDefaultWithoutSpotify()
+    {
+        var cfg = new AppConfig();   // defaultSource auto, no Spotify set up → radio
+        var music = new ZoneMusic(ZoneCatalog.Load(), new SpotifyWebApi(Path.GetTempFileName()), () => cfg, () => GameOverrides.Empty);
+        var (lua, _) = await ResolvedLua.BuildAsync(music);
+        Assert.Contains("source = { default = \"radio\", spotify = false }", lua);
     }
 
     [Fact]

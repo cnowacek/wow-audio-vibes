@@ -224,6 +224,56 @@ def test_links_for_defaults_custom_and_unknown(wow):
     assert ui.copyField._text == "https://open.spotify.com/album/2noRn2Aes5aoNVsU6iWThc"
 
 
+def test_radio_turns_off_next_prev_and_like(wow):
+    rt, G = wow
+    AV = G.AudioVibes
+    G.AudioVibesResolved = rt.eval("""{
+        source = { default = "radio", spotify = false },
+        locations = { ["map:1453"] = { relaxed = { uri = "radio:https://ice1.somafm.com/thistle-128-mp3", name = "Thistle" } } },
+        types = {},
+    }""")
+    AV.Fire("SOURCE")
+    assert AV.CompanionSource().known is True
+    assert AV.CurrentSource().kind == "radio"
+    G.MOCK.played = rt.eval("{}")
+    assert AV.Send("NEXT") is False and AV.Send("PREV") is False and AV.Send("LIKE_CURRENT") is False
+    assert AV.Send("PLAY_PAUSE") is True
+    G.SlashCmdList["AUDIOVIBES"]("next")
+    for _ in range(5):
+        G.MOCK.runTimers(); G.MOCK.now = G.MOCK.now + 1
+    assert names_played(G) == ["cmd_01.ogg"], "only play/pause went out"
+
+    # A Spotify playlist here: everything works, except Like while the companion has no Spotify.
+    AV.SavePlaylist("location", "map:1453", "relaxed", "spotify:playlist:SW", "SW", False)
+    G.MOCK.fire("ADDON_LOADED", "AudioVibes")   # a reload: the companion has the change
+    assert AV.CurrentSource().kind == "spotify"
+    assert AV.ControlUnavailable("NEXT") is None
+    assert "Spotify connected" in AV.ControlUnavailable("LIKE_CURRENT")
+
+    # Hype plays something else until the next location.
+    AV.SavePlaylist("hype", None, None, "folder:C:\\Music\\Hype", "Hype", False)
+    AV.Send("EVT_HYPE")
+    assert AV.CurrentSource().kind == "folder"
+    assert AV.ControlUnavailable("NEXT") is None
+    G.MOCK.loc.mapId = 1429
+    G.MOCK.fire("ZONE_CHANGED_NEW_AREA")
+    assert AV.CurrentSource().kind == "radio"   # Elwynn: the companion's default source
+
+    # The UI shows it without errors.
+    for page in ("settings", "locations"):
+        AV.ToggleConfig(page, True)
+        n, errs = G.MOCK.clickAll()
+        assert lua_list(errs) == []
+
+
+def test_no_source_info_greys_nothing_out(wow):
+    rt, G = wow
+    AV = G.AudioVibes
+    assert AV.CompanionSource().known is False
+    assert AV.CurrentSource().kind is None
+    assert AV.ControlUnavailable("NEXT") is None and AV.ControlUnavailable("LIKE_CURRENT") is None
+
+
 def test_link_buttons_run_without_errors(wow):
     rt, G = wow
     AV = G.AudioVibes

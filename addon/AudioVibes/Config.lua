@@ -292,8 +292,10 @@ function L:Refresh()
   if loc then
     local pl = M.PlaylistFor(loc.key)
     local mode = M.EffectiveMode(loc.key, loc.type)
-    cLine:SetText(("|cffffd100%s|r|cffb3a98f \194\183 %s \194\183 |r%s|cffb3a98f \194\183 %s|r"):format(
-      loc.name, T.TYPE_LABEL[loc.type] or "Zone", pl.name, M.MODE_NAME[mode]))
+    local src = M.CurrentSource()
+    cLine:SetText(("|cffffd100%s|r|cffb3a98f \194\183 %s \194\183 |r%s|cffb3a98f \194\183 %s%s|r"):format(
+      loc.name, T.TYPE_LABEL[loc.type] or "Zone", pl.name, M.MODE_NAME[mode],
+      (not src.why and src.kind) and (" \194\183 " .. M.SOURCE_NAME[src.kind]) or ""))
     cPlay:SetEnabledState(true); cChange:SetEnabledState(true)
     cLink:SetEnabledState(M.LinkFor(loc.key) ~= nil)
   else
@@ -341,6 +343,22 @@ local music = box("Music", 14, ROW1, 150)
 addCheck(music, "Switch playlist when I change location", "Cities, zones, dungeons and raids each have their own playlist", "autoSwitch")
 addCheck(music, "Resume the zone playlist after an instance", "Leaving a dungeon picks up the outside playlist again", "resumeAfterInstance")
 addCheck(music, "Shuffle when a playlist starts", "Applies to every location unless it sets its own", "shuffle")
+
+-- Where the music comes from (the companion's setup, from Resolved.lua, and what plays here)
+local function sourceTooltip()
+  local cs, src = M.CompanionSource(), M.CurrentSource()
+  if not cs.known then
+    return "Music source", "The companion app hasn't told the addon its setup yet. Start the companion, then /reload."
+  end
+  local default = cs.default == "off" and "nothing (defaults are off)" or (M.SOURCE_NAME[cs.default] or cs.default)
+  local lines = ("Default playlists come from: %s\nSpotify in the companion: %s"):format(
+    default, cs.spotify and "connected" or "not connected")
+  if src.kind then lines = lines .. "\nPlaying here: " .. M.SOURCE_NAME[src.kind] .. " \226\128\148 " .. (src.name or "?") end
+  if src.kind == "radio" then lines = lines .. "\nRadio is live: Next, Previous and Like are off." end
+  return "Music source", lines, "Change it in the companion: tray icon \226\128\186 Settings \226\128\186 Music"
+end
+local sourcePill = T.Pill(music, "Source", "default", { onClick = function() end, tooltip = sourceTooltip })
+sourcePill:SetPoint("TOPRIGHT", -14, -13)
 
 local events = box("Events", 28 + COLW, ROW1, 150)
 addCheck(events, "Lower music when a queue pops", "Back to normal after 8 seconds", "queueDuck")
@@ -454,6 +472,10 @@ function Sg:Refresh()
     logLines[i].what:SetText(e and e.what or (i == 1 and "|cffb3a98fNothing sent yet|r" or ""))
     logLines[i].when:SetText(e and T.Ago(e.t) or "")
   end
+  local cs, src = M.CompanionSource(), M.CurrentSource()
+  local kind = src.kind or (cs.known and cs.default ~= "off" and cs.default) or nil
+  sourcePill:SetLabel(kind and ((src.kind and "Playing: " or "Default: ") .. M.SOURCE_NAME[kind]) or "Source: unknown")
+  sourcePill:SetStyle(kind == "spotify" and "custom" or "default")
   local h = M.db.hype
   hypeLine:SetText("|cffb3a98fHype playlist: |r" .. (h and h.name or "the companion's default"))
   for _, b in ipairs(binds) do b.key:SetText(M.KeyFor(b.binding) or "not set") end
@@ -507,3 +529,4 @@ M.On("LOCATION", refreshVisible)
 M.On("PLAYLISTS", refreshVisible)
 M.On("SETTINGS", refreshVisible)
 M.On("SIGNAL", refreshVisible)
+M.On("SOURCE", refreshVisible)

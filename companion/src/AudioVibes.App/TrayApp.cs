@@ -403,6 +403,7 @@ public sealed class TrayApp : ApplicationContext, ISettingsHost
     private async Task<string?> RefreshSpotifyStatusAsync()
     {
         string status; bool connected = false; string? who = null;
+        ScheduleResolvedWrite();   // the addon's source info (Spotify on/off) may have changed
         if (string.IsNullOrWhiteSpace(_config.Spotify.ClientId))
             status = "Spotify: not set up (playing free radio)";
         else if (!_web.HasRefreshToken)

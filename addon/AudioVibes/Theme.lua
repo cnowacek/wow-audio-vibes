@@ -176,6 +176,7 @@ function T.IconButton(parent, icon, onClick, opts)
   b.icon = T.Icon(b, icon, opts.iconSize or 16)
   b.icon:SetPoint("CENTER")
   b.tooltip = opts.tooltip
+  function b:SetEnabledState(on) self.disabled = not on; buttonColors(self, self.hovered and on) end
   wireButton(b, onClick)
   return b
 end

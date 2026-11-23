@@ -5,7 +5,8 @@ namespace AudioVibes.App;
 
 /// <summary>
 /// Writes the addon's Resolved.lua: the playlist the companion has chosen for every location (defaults
-/// and Zone-playlists-window overrides; the addon handles in-game playlists itself). This is the only
+/// and Zone-playlists-window overrides; the addon handles in-game playlists itself), plus its music setup
+/// (default source, Spotify on or off). This is the only
 /// thing that flows companion → game: WoW reads the file on login and /reload, so the addon can show
 /// real playlist names and copyable links.
 /// </summary>
@@ -42,7 +43,12 @@ public static class ResolvedLua
         return s + " }";
     }
 
-    public static string Render(IReadOnlyDictionary<string, ModeEntries> locations, IReadOnlyDictionary<string, ModeEntries> types, DateTime when)
+    /// <summary>The companion's music setup, so the addon can tell what plays and grey out what can't work.
+    /// DefaultSource: "spotify" | "radio" | "off" (auto already worked out); Spotify: Spotify playlists can be started.</summary>
+    public sealed record SourceInfo(string DefaultSource, bool Spotify);
+
+    public static string Render(IReadOnlyDictionary<string, ModeEntries> locations, IReadOnlyDictionary<string, ModeEntries> types, DateTime when,
+                                SourceInfo? source = null)
     {
         static void Write(StringBuilder sb, IReadOnlyDictionary<string, ModeEntries> d)
         {
@@ -62,6 +68,9 @@ public static class ResolvedLua
         sb.Append("-- companion writes it again.\n");
         sb.Append("AudioVibesResolved = {\n");
         sb.Append("  updated = ").Append(Str(when.ToString("yyyy-MM-dd HH:mm"))).Append(",\n");
+        if (source != null)
+            sb.Append("  source = { default = ").Append(Str(source.DefaultSource))
+              .Append(", spotify = ").Append(source.Spotify ? "true" : "false").Append(" },\n");
         sb.Append("  locations = {\n"); Write(sb, locations); sb.Append("  },\n");
         sb.Append("  types = {\n"); Write(sb, types); sb.Append("  },\n");
         sb.Append("}\n");
@@ -93,7 +102,7 @@ public static class ResolvedLua
             if (e.Relaxed != null || e.Locked != null) types[type] = e;
         }
         // Keep the timestamp out of change detection: only rewrite when a playlist actually changed.
-        return (Render(locs, types, DateTime.Now), locs.Count);
+        return (Render(locs, types, DateTime.Now, new SourceInfo(music.DefaultSource, music.SpotifyReady)), locs.Count);
     }
 
     /// <summary>Writes the file if its playlists changed. Returns true if written.</summary>

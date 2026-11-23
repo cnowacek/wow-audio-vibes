@@ -69,14 +69,22 @@ local controls = CreateFrame("Frame", nil, bar)
 controls:SetPoint("TOPLEFT", 0, -69); controls:SetPoint("TOPRIGHT", 0, -69); controls:SetHeight(52)
 
 local function shiftHint() return "Shift-click: back to location playlist" end
+-- Tooltip for a transport button: its reason when what's playing can't do it, else the usual text.
+local function transportTip(name, title, desc)
+  return function()
+    local why = M.ControlUnavailable(name)
+    if why then return title, why, "Not available right now" end
+    return title, type(desc) == "function" and desc() or desc
+  end
+end
 local prev = T.IconButton(controls, "prev", function() M.Send("PREV") end,
-  { tooltip = function() return "Previous track", keyText("AUDIOVIBES_PREV") end })
+  { tooltip = transportTip("PREV", "Previous track", function() return keyText("AUDIOVIBES_PREV") end) })
 prev:SetPoint("LEFT", 12, 0)
 local play = T.IconButton(controls, "play", function() M.Send("PLAY_PAUSE") end,
   { size = 40, iconSize = 18, large = true, tooltip = function() return "Play / pause", keyText("AUDIOVIBES_PLAYPAUSE") end })
 play:SetPoint("LEFT", prev, "RIGHT", 6, 0)
 local nxt = T.IconButton(controls, "next", function() M.Send("NEXT") end,
-  { tooltip = function() return "Next track", keyText("AUDIOVIBES_NEXT") end })
+  { tooltip = transportTip("NEXT", "Next track", function() return keyText("AUDIOVIBES_NEXT") end) })
 nxt:SetPoint("LEFT", play, "RIGHT", 6, 0)
 local div = T.Line(controls, C.chipBorder, false)
 div:SetHeight(24); div:SetPoint("LEFT", nxt, "RIGHT", 10, 0)
@@ -87,7 +95,7 @@ local vup = T.IconButton(controls, "volup", function() M.Send("VOL_UP") end,
   { tooltip = { "Volume up", "Turns the music up 10%." } })
 vup:SetPoint("LEFT", vdown, "RIGHT", 6, 0)
 local like = T.IconButton(controls, "heart", function() M.Send("LIKE_CURRENT") end,
-  { tooltip = { "Like track", "Saves the playing track to your Spotify library.", "Needs Spotify connected in the companion app" } })
+  { tooltip = transportTip("LIKE_CURRENT", "Like track", "Saves the playing track to your Spotify library.") })
 like:SetPoint("LEFT", vup, "RIGHT", 6, 0)
 local hype = T.IconButton(controls, "bolt", function()
   if IsShiftKeyDown() and M.location then M.PlayLocation(M.location.key, "Back to location playlist")
@@ -126,14 +134,14 @@ local expand = T.IconButton(mini, "down", nil, { size = 28, iconSize = 14, flat 
   tooltip = { "Expand", "Show the full player bar." } })
 expand:SetPoint("RIGHT", -6, 0)
 local mNext = T.IconButton(mini, "next", function() M.Send("NEXT") end,
-  { size = 28, iconSize = 14, tooltip = function() return "Next track", keyText("AUDIOVIBES_NEXT") end })
+  { size = 28, iconSize = 14, tooltip = transportTip("NEXT", "Next track", function() return keyText("AUDIOVIBES_NEXT") end) })
 mNext:SetPoint("RIGHT", expand, "LEFT", -6, 0)
 local mPlay = T.IconButton(mini, "play", function() M.Send("PLAY_PAUSE") end,
   { size = 28, iconSize = 14, tooltip = function() return "Play / pause", keyText("AUDIOVIBES_PLAYPAUSE") end })
 mPlay.border = C.gold; mPlay.textColor = C.gold; T.RefreshButton(mPlay)
 mPlay:SetPoint("RIGHT", mNext, "LEFT", -6, 0)
 local mPrev = T.IconButton(mini, "prev", function() M.Send("PREV") end,
-  { size = 28, iconSize = 14, tooltip = function() return "Previous track", keyText("AUDIOVIBES_PREV") end })
+  { size = 28, iconSize = 14, tooltip = transportTip("PREV", "Previous track", function() return keyText("AUDIOVIBES_PREV") end) })
 mPrev:SetPoint("RIGHT", mPlay, "LEFT", -6, 0)
 local mName = T.Text(mini, 12, C.text)
 mName:SetPoint("LEFT", mWave, "RIGHT", 8, 0)
@@ -173,8 +181,11 @@ local function refresh()
     modePill:SetStyle(mode)
     modePill:SetLabel(M.MODE_NAME[mode] .. (why == "location" and " \194\183 here" or ""))
     modePill:Show()
-    plName:SetText(pl.name)
-    mName:SetText(pl.name)
+    local src = M.CurrentSource()
+    local shown = src.why and src.why ~= "pending" and src.name or pl.name
+    local kindText = src.kind and (" |cffb3a98f\194\183 " .. M.SOURCE_NAME[src.kind] .. "|r") or ""
+    plName:SetText(shown .. kindText)
+    mName:SetText(shown)
     plPill:SetStyle(pl.custom and "custom" or "default")
     plPill:SetLabel(pl.custom and "Custom" or "Default")
     plPill:Show()
@@ -185,6 +196,9 @@ local function refresh()
     plName:SetText("Waiting for your location…")
     mName:SetText("Audio Vibes")
     plPill:Hide()
+  end
+  for b, name in pairs({ [prev] = "PREV", [nxt] = "NEXT", [mPrev] = "PREV", [mNext] = "NEXT", [like] = "LIKE_CURRENT" }) do
+    b:SetEnabledState(not M.ControlUnavailable(name))
   end
   auto:Refresh()
   refreshSignal()
@@ -209,6 +223,7 @@ M.On("LOCATION", refresh)
 M.On("PLAYLISTS", refresh)
 M.On("SETTINGS", refresh)
 M.On("COMBAT", refresh)
+M.On("SOURCE", refresh)
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
