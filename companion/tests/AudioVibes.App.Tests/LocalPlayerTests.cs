@@ -1,5 +1,6 @@
 using AudioVibes.App;
 using NAudio.Wave;
+using Serilog;
 using Xunit;
 
 namespace AudioVibes.App.Tests;
@@ -129,6 +130,65 @@ public class LocalPlayerTests
             catch (Exception e) { return $"fail {e.GetType().Name}: {e.Message.Split('\n')[0]} {url}"; }
         }));
         File.WriteAllLines(file + ".out", results);
+    }
+
+    /// <summary>
+    /// With nothing to play, the output must be silence across the whole block, also when NAudio hands it the
+    /// device's byte[] disguised as a float[] (that's how SampleToWaveProvider calls it). Array.Clear on such
+    /// a buffer clears only a quarter of it; the rest replayed old audio as a buzz whenever radio was paused.
+    /// </summary>
+    [Fact]
+    public void SilenceFillsTheWholeBlock()
+    {
+        using var player = new LocalPlayer();
+        var output = (ISampleProvider)typeof(LocalPlayer).GetField("_output", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
+        var bytes = new byte[4800 * 4];
+        for (int i = 0; i < bytes.Length; i += 4) BitConverter.TryWriteBytes(bytes.AsSpan(i), 0.5f);   // old audio
+        var wb = new WaveBuffer(bytes);
+        Assert.Equal(4800, output.Read(wb.FloatBuffer, 0, 4800));
+        for (int i = 0; i < bytes.Length; i += 4) Assert.True(BitConverter.ToSingle(bytes, i) == 0f, $"sample {i / 4} wasn't silenced");
+    }
+
+    /// <summary>
+    /// Plays a radio station on the real speakers, pauses it, and records what Windows plays (loopback) before
+    /// and after the pause. Off by default (needs the internet and makes noise); set AUDIOVIBES_AUDIO_TESTS=1.
+    /// </summary>
+    [SkippableFact]
+    public async Task PausedRadioIsSilent()
+    {
+        Skip.IfNot(Environment.GetEnvironmentVariable("AUDIOVIBES_AUDIO_TESTS") == "1", "set AUDIOVIBES_AUDIO_TESTS=1 to play through the speakers");
+        var station = ZoneCatalog.Load().Stations["darkzone"];
+        var logPath = Path.Combine(Path.GetTempPath(), "audiovibes-pause.log");
+        File.Delete(logPath);
+        Serilog.Log.Logger = new Serilog.LoggerConfiguration().MinimumLevel.Debug().WriteTo.File(logPath).CreateLogger();
+        using var player = new LocalPlayer();
+        var levels = new List<(double T, float Peak, float Rms)>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        // Only this test process's own audio, so whatever else is playing on the PC doesn't count.
+        using var capture = new AudioVibes.Audio.ProcessLoopbackCapture(Environment.ProcessId);
+        capture.SamplesAvailable += block =>
+        {
+            float peak = 0; double sum = 0;
+            foreach (var s in block) { var v = Math.Abs(s); peak = Math.Max(peak, v); sum += v * v; }
+            lock (levels) levels.Add((clock.Elapsed.TotalSeconds, peak, block.Length > 0 ? (float)Math.Sqrt(sum / block.Length) : 0));
+        };
+        capture.Start();
+        await player.PlayAsync("radio:" + station.Url, false);
+        await Task.Delay(4000);
+        var pausedAt = clock.Elapsed.TotalSeconds;
+        Assert.True(player.Pause());
+        await Task.Delay(3000);
+        player.Stop();
+        capture.Dispose();
+        lock (levels)
+        {
+            var report = string.Join("\n", levels.Select(l => $"{l.T - pausedAt,6:0.00}s peak={l.Peak:0.000} rms={l.Rms:0.000}"));
+            File.WriteAllText(Path.Combine(Path.GetTempPath(), "audiovibes-pause.txt"), report);
+            var before = levels.Where(l => l.T > pausedAt - 2 && l.T < pausedAt).ToList();
+            var after = levels.Where(l => l.T > pausedAt + 0.5).ToList();
+            Assert.True(before.Count > 0 && before.Max(l => l.Rms) > 0.001f, "nothing was playing before the pause");
+            Assert.True(after.Max(l => l.Peak) < 0.01f, $"sound after pausing: peak {after.Max(l => l.Peak):0.000}\n{report}");
+        }
     }
 
     /// <summary>Live check of the built-in stations. Off by default (needs the internet); set AUDIOVIBES_NET_TESTS=1.</summary>

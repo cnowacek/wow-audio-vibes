@@ -81,7 +81,7 @@ You need the .NET 10 SDK (pinned in `global.json`), plus Python 3.10+ for the te
 .\scripts\link-addon.ps1 -Flavor _retail_   # or another client
 cd companion; dotnet build -c Release; dotnet test
 ```
-`$env:AUDIOVIBES_NET_TESTS = "1"; dotnet test` also checks that every built-in radio station still streams and decodes. To try new stations, put their stream URLs in a text file (one per line), set `$env:AUDIOVIBES_PROBE_FILE` to its path and run `dotnet test --filter ProbeCandidateStations`; the results land next to it in `<file>.out`. SHOUTcast v1 servers (`ICY 200 OK`) don't work with .NET's HTTP client, so pick another port or mount for those.
+`$env:AUDIOVIBES_NET_TESTS = "1"; dotnet test` also checks that every built-in radio station still streams and decodes. `$env:AUDIOVIBES_AUDIO_TESTS = "1"` plays a station through the speakers, pauses it and records the test's own output (process loopback) to check that the pause is silent. To try new stations, put their stream URLs in a text file (one per line), set `$env:AUDIOVIBES_PROBE_FILE` to its path and run `dotnet test --filter ProbeCandidateStations`; the results land next to it in `<file>.out`. SHOUTcast v1 servers (`ICY 200 OK`) don't work with .NET's HTTP client, so pick another port or mount for those.
 
 Run `companion\src\AudioVibes.App\bin\Release\net10.0-windows10.0.19041.0\WoWAudioVibes.exe`. A build from `bin\` never updates itself; only the installed app does.
 

@@ -99,6 +99,14 @@ Status as of 2026-11-22. ✅ = verified on this machine · ⏳ = needs you in ga
 | .NET 10 | ✅ Moved from .NET 8 (support ended 10 Nov 2026) to .NET 10 LTS (supported to Nov 2028). SDK pinned in `global.json`. Packages updated: ProtectedData 10.0.15, Serilog 4.4.0, Serilog.Sinks.File 7.0.0, Test.Sdk 18.12.0, xunit runner 3.1.5. Builds with no warnings; all tests pass. |
 | Not code-signed | SmartScreen warns on first run. `vpk pack` takes `--signParams` or `--azureTrustedSignFile` if you get a certificate. |
 
+## Pause buzz (fixed 2026-11-22)
+| Item | Result |
+|---|---|
+| Symptom | A loud buzz when radio was paused. |
+| Cause | `SampleToWaveProvider` passes the WASAPI byte[] disguised as a float[] (NAudio's `WaveBuffer` union trick). `Array.Clear(buffer, offset, count)` goes by the real element size (bytes), so it zeroed only a quarter of each silent block; the rest replayed the last block of music. During playback every sample is written, so it only showed in gaps: pause, a stalled stream, between folder tracks. |
+| Fix | `LocalPlayer.Output.Read` zeroes the rest with a plain float loop. Never use `Array.Clear`/`Array.Copy` on a buffer that came from NAudio's `WaveBuffer`. |
+| Verified | ✅ Reproduced and fixed with `PausedRadioIsSilent`, which records the test process's own audio: a constant tone after the pause before the fix, digital silence 0.25 s after it (the device's buffer). ✅ `SilenceFillsTheWholeBlock` fails without the fix. |
+
 ## Gotchas found
 - **Long paths**: .NET apphost `.exe`s misbehave when the repo lives in a very deep folder (> 260 chars). The repo now lives at `C:\Users\charl\projects\wow-audio-vibes`, where the `.exe`s work. If you move it, keep the path short.
 - **Tests and local state**: the companion tests set `AUDIOVIBES_HOME` to a temp folder. Before that change they read the real `%APPDATA%\WoW Audio Vibes\zone-state.json` and failed once real playlists were cached.

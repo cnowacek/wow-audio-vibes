@@ -141,6 +141,7 @@ public sealed class LocalPlayer : ILocalPlayer, IDisposable
     {
         if (_device != null) return;
         _device = new WasapiOut(AudioClientShareMode.Shared, 200);
+        _device.PlaybackStopped += (_, e) => { if (e.Exception != null) Log.Warning(e.Exception, "audio output stopped"); };
         _device.Init(new SampleToWaveProvider(_output));
         _device.Play();
     }
@@ -487,7 +488,10 @@ public sealed class LocalPlayer : ILocalPlayer, IDisposable
                 if (n == 0 && t.Eof && Interlocked.Exchange(ref t.EndedSignalled, 1) == 0)
                     ThreadPool.QueueUserWorkItem(_ => player.OnTrackEnded(t));
             }
-            Array.Clear(buffer, offset + n, count - n);
+            // Silence for the rest. Not Array.Clear: NAudio's SampleToWaveProvider passes the device's byte[]
+            // disguised as a float[] (WaveBuffer), and Array.Clear goes by the real element size, so it cleared
+            // only a quarter of the block and the rest replayed old audio: a loud buzz whenever music paused.
+            for (int i = offset + n, end = offset + count; i < end; i++) buffer[i] = 0f;
             // ramp the gain over the block so volume/duck changes don't click
             float target = Volume * Duck, g = _gain, step = count > 0 ? (target - g) / count : 0;
             for (int i = 0; i < n; i++) { g += step; buffer[offset + i] *= g; }
