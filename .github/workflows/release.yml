@@ -2,7 +2,9 @@
 # Installed companions pick the update up on their next check (every 6 hours, or tray → Check for updates).
 #   git tag v1.2.0
 #   git push origin v1.2.0
-# Release notes: put them in the tag message (git tag -a v1.2.0 -m "...") or edit the release afterwards.
+# Or, without a command-line git: push the commits (GitHub Desktop), then Actions → release → Run workflow
+# with the version; the release and its tag are created on main.
+# Release notes: the tag message (git tag -a v1.2.0 -m "..."), else release-notes/<version>.md.
 name: release
 
 on:
@@ -40,8 +42,10 @@ jobs:
           $v = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.version }}" } else { "${{ github.ref_name }}".TrimStart("v") }
           "version=$v" >> $env:GITHUB_OUTPUT
           # Tag message (annotated tags) becomes the release notes.
+          # Otherwise release-notes/<version>.md (for runs started from the Actions tab, where no tag exists yet).
           $msg = git tag -l --format="%(contents)" "v$v"
           if ($msg) { $msg | Set-Content notes.md -Encoding utf8; "notes=notes.md" >> $env:GITHUB_OUTPUT }
+          elseif (Test-Path "release-notes/$v.md") { "notes=release-notes/$v.md" >> $env:GITHUB_OUTPUT }
 
       - name: Addon and protocol tests
         shell: pwsh
